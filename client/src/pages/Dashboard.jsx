@@ -59,7 +59,7 @@ export default function Dashboard() {
       // 최신 정보를 가져오기 위해 서버에서 다시 조회
       const updatedChatRoom = await getChatRoom(chatRoom._id);
       setSelectedChatRoom(updatedChatRoom);
-      setIsInChat(true);
+      // setIsInChat(true); // 이 줄을 제거
     } catch (err) {
       console.error('채팅방 정보 로드 실패:', err);
       setError('채팅방 정보를 불러오는데 실패했습니다.');
