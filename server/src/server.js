@@ -22,6 +22,7 @@ io.on('connection', (socket) => {
 
   // 채팅방 입장
   socket.on('join-room', ({ roomId, userId, nickname }) => {
+    console.log(`[join-room] roomId: ${roomId}, userId: ${userId}, nickname: ${nickname}`);
     socket.join(roomId);
     connectedUsers.set(socket.id, { userId, nickname, roomId });
     console.log(`${nickname}님이 채팅방 ${roomId}에 입장했습니다.`);
@@ -32,6 +33,7 @@ io.on('connection', (socket) => {
 
   // 메시지 전송
   socket.on('send-message', ({ roomId, message, userId, nickname }) => {
+    console.log(`[send-message] roomId: ${roomId}, userId: ${userId}, nickname: ${nickname}, message: ${message}`);
     const messageData = {
       id: Date.now(),
       roomId,
