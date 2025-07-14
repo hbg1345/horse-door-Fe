@@ -16,6 +16,7 @@ jobs:
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SERVER_SSH_KEY }}
         script: |
-          cd /horse-door-Fe
+          cd /home/ubuntu/horse-door-Fe
           git pull
+          chmod +x deploy.sh
           ./deploy.sh
