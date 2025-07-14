@@ -1,7 +1,84 @@
 const { Router } = require('express');
 const ChatRoom = require('../models/ChatRoom');
+const axios = require('axios');
 
 const router = Router();
+
+// Perplexity 평가 프롬프트 생성 함수
+function makePrompt(message) {
+  return `\n아래 채팅 메시지를 다음 기준에 따라 각각 1~5점으로 평가해 주세요.\n\n
+  - 논리성: 1~5점 (모순, 논점 일탈, 형식적 오류 여부)\n
+  - 상호존중: 1~5점 (심한 인신공격, 비속어, 비하 금지)\n
+  - 창의성: 1~5점 (새로운 아이디어, 독창성, 기발함)\n
+  - 카운터: 1~5점 (상대 문장 중 자충수/모순을 지적한 정도)\n
+  \n**설명, 평가, 기타 텍스트 없이 *반드시 반드시 반드시 반드시* 아래 예시처럼 JSON만 출력하고, 평가할 수 없다면 0을 주도록 해.**\n\n
+  예시:\n{\n  \"논리성\": 4,\n  \"상호존중\": 5,\n  \"창의성\": 3,\n  \"카운터\": 2\n}
+  \n\n채팅 메시지: \"${message}\"\n`;
+}
+
+// Perplexity API 평가 함수
+async function evaluateWithPerplexity(message) {
+  // 원하는 JSON 구조를 schema로 정의
+  const jsonSchema = {
+    type: "object",
+    properties: {
+      논리성: { type: "integer" },
+      상호존중: { type: "integer" },
+      창의성: { type: "integer" },
+      카운터: { type: "integer" }
+    },
+    required: ["논리성", "상호존중", "창의성", "카운터"]
+  };
+
+  const prompt = makePrompt(message);
+
+  try {
+    const res = await axios.post(
+      'https://api.perplexity.ai/chat/completions',
+      {
+        model: "sonar",
+        messages: [
+          { role: "system", content: "모든 답변은 반드시 JSON 형식으로만 출력하세요." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.2,
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            schema: jsonSchema
+          }
+        }
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    // Perplexity 공식 문서 기준: content는 항상 JSON 문자열임
+    const content = res.data.choices[0].message.content.trim();
+    return JSON.parse(content);
+  } catch (e) {
+    console.error("Perplexity 응답 파싱 실패:", e?.response?.data || e.message);
+    return null;
+  }
+}
+
+// 채팅 메시지 평가 API
+router.post('/evaluate', async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: '메시지가 필요합니다.' });
+  try {
+    const score = await evaluateWithPerplexity(message);
+    if (!score) return res.status(500).json({ error: 'AI 평가 실패' });
+    res.json({ score });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '서버 에러' });
+  }
+});
 
 // 채팅방 목록 조회
 router.get('/chatrooms', async (req, res) => {
