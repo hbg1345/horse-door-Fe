@@ -66,12 +66,59 @@ async function evaluateWithPerplexity(message) {
   }
 }
 
+// Gemini 1.5 Flash API 평가 함수 추가
+async function evaluateWithGemini(message) {
+  const prompt = makePrompt(message);
+  try {
+    const res = await axios.post(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent',
+      {
+        contents: [
+          { role: "user", parts: [{ text: prompt }] }
+        ],
+        generationConfig: {
+          temperature: 0.2
+        }
+      },
+      {
+        headers: {
+          "Content-Type": "application/json"
+        },
+        params: {
+          key: process.env.GEMINI_API_KEY
+        }
+      }
+    );
+    let content = res.data.candidates[0].content.parts[0].text.trim();
+    // 마크다운 코드블록 제거
+    content = content.replace(/```json|```/g, '').trim();
+    return JSON.parse(content);
+  } catch (e) {
+    console.error("Gemini 응답 파싱 실패:", e?.response?.data || e.message);
+    return null;
+  }
+}
+
 // 채팅 메시지 평가 API
 router.post('/evaluate', async (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: '메시지가 필요합니다.' });
   try {
     const score = await evaluateWithPerplexity(message);
+    if (!score) return res.status(500).json({ error: 'AI 평가 실패' });
+    res.json({ score });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: '서버 에러' });
+  }
+});
+
+// Gemini 평가 API 라우터 추가
+router.post('/evaluate-gemini', async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: '메시지가 필요합니다.' });
+  try {
+    const score = await evaluateWithGemini(message);
     if (!score) return res.status(500).json({ error: 'AI 평가 실패' });
     res.json({ score });
   } catch (err) {

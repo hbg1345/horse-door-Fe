@@ -40,4 +40,10 @@ export const deleteChatRoom = async (id) => {
 export const evaluateMessage = async (message) => {
   const response = await api.post('/api/evaluate', { message });
   return response.data.score; // { 창의성: x, 논리성: y, 예의: z }
+};
+
+// Gemini 평가
+export const evaluateMessageWithGemini = async (message) => {
+  const response = await api.post('/api/evaluate-gemini', { message });
+  return response.data.score;
 }; 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../contexts/AuthContext';
-import { evaluateMessage } from '../lib/chatroomApi';
+import { evaluateMessage, evaluateMessageWithGemini } from '../lib/chatroomApi';
 
 export default function ChatRoom({ chatRoom, onBack }) {
   const { user } = useAuth();
@@ -80,10 +80,24 @@ export default function ChatRoom({ chatRoom, onBack }) {
     e.preventDefault();
     if (!newMessage.trim() || !socket) return;
 
-    // 1. 메시지 평가 요청
-    let score = null;
+    // 1. Perplexity, Gemini 평가 요청 (동시에)
+    let perplexityScore = null;
+    let geminiScore = null;
+    let avgScore = null;
     try {
-      score = await evaluateMessage(newMessage.trim());
+      [perplexityScore, geminiScore] = await Promise.all([
+        evaluateMessage(newMessage.trim()),
+        evaluateMessageWithGemini(newMessage.trim())
+      ]);
+      // 두 점수의 각 항목별 평균 계산
+      if (perplexityScore && geminiScore) {
+        avgScore = {};
+        for (const key of Object.keys(perplexityScore)) {
+          if (geminiScore[key] !== undefined) {
+            avgScore[key] = Number(((perplexityScore[key] + geminiScore[key]) / 2).toFixed(1));
+          }
+        }
+      }
     } catch (err) {
       console.error('메시지 평가 실패:', err);
     }
@@ -93,7 +107,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
       message: newMessage.trim(),
       userId: user.id,
       nickname: user.nickname,
-      score // 점수도 같이 보냄 (null일 수도 있음)
+      score: avgScore // 평균 점수만 저장
     };
 
     socket.emit('send-message', messageData);
@@ -178,10 +192,10 @@ export default function ChatRoom({ chatRoom, onBack }) {
                 <div className="text-xs opacity-75 mb-1">{message.nickname}</div>
               )}
               <div className="font-mono">{message.message}</div>
-              {/* 점수 표시 */}
+              {/* 평균 점수만 표시 */}
               {message.score && (
-                <div className="text-xs text-yellow-400 mt-1 font-mono">
-                  창의성: {message.score.창의성}, 논리성: {message.score.논리성}, 예의: {message.score.예의}
+                <div className="text-xs text-green-400 mt-1 font-mono">
+                  {JSON.stringify(message.score)}
                 </div>
               )}
               <div className="text-xs opacity-75 mt-1">
