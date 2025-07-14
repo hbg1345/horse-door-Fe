@@ -32,7 +32,7 @@ io.on('connection', (socket) => {
   });
 
   // 메시지 전송
-  socket.on('send-message', ({ roomId, message, userId, nickname }) => {
+  socket.on('send-message', ({ roomId, message, userId, nickname, score }) => {
     console.log(`[send-message] roomId: ${roomId}, userId: ${userId}, nickname: ${nickname}, message: ${message}`);
     const messageData = {
       id: Date.now(),
@@ -40,6 +40,7 @@ io.on('connection', (socket) => {
       userId,
       nickname,
       message,
+      score, // ← 추가!
       timestamp: new Date().toISOString()
     };
     
