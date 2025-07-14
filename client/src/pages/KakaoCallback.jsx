@@ -7,7 +7,7 @@ export default function KakaoCallback() {
   useEffect(() => {
     const code = new URL(window.location.href).searchParams.get('code');
     if (code) {
-      fetch(`/api/auth/kakao/callback?code=${code}`, {
+      fetch(`/auth/kakao/callback?code=${code}`, {
         credentials: 'include',
       })
         .then(res => {
