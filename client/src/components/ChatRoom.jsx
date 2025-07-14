@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../contexts/AuthContext';
+import { evaluateMessage } from '../lib/chatroomApi';
 
 export default function ChatRoom({ chatRoom, onBack }) {
   const { user } = useAuth();
@@ -75,15 +76,24 @@ export default function ChatRoom({ chatRoom, onBack }) {
     };
   }, [chatRoom, user]);
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !socket) return;
+
+    // 1. 메시지 평가 요청
+    let score = null;
+    try {
+      score = await evaluateMessage(newMessage.trim());
+    } catch (err) {
+      console.error('메시지 평가 실패:', err);
+    }
 
     const messageData = {
       roomId: chatRoom._id,
       message: newMessage.trim(),
       userId: user.id,
-      nickname: user.nickname
+      nickname: user.nickname,
+      score // 점수도 같이 보냄 (null일 수도 있음)
     };
 
     socket.emit('send-message', messageData);
@@ -168,6 +178,12 @@ export default function ChatRoom({ chatRoom, onBack }) {
                 <div className="text-xs opacity-75 mb-1">{message.nickname}</div>
               )}
               <div className="font-mono">{message.message}</div>
+              {/* 점수 표시 */}
+              {message.score && (
+                <div className="text-xs text-yellow-400 mt-1 font-mono">
+                  창의성: {message.score.창의성}, 논리성: {message.score.논리성}, 예의: {message.score.예의}
+                </div>
+              )}
               <div className="text-xs opacity-75 mt-1">
                 {formatTime(message.timestamp)}
               </div>

@@ -34,4 +34,10 @@ export const leaveChatRoom = async (id) => {
 export const deleteChatRoom = async (id) => {
   const response = await api.delete(`/api/chatrooms/${id}`);
   return response.data;
+};
+
+// 채팅 메시지 평가 (Perplexity)
+export const evaluateMessage = async (message) => {
+  const response = await api.post('/api/evaluate', { message });
+  return response.data.score; // { 창의성: x, 논리성: y, 예의: z }
 }; 
