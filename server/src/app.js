@@ -19,7 +19,7 @@ app.use(session({
   saveUninitialized: false,
   store: MongoStore.create({ mongoUrl: MONGODB_URI }),
   cookie: {
-    secure: NODE_ENV === 'production',
+    secure: false, // 항상 false로 설정
     httpOnly: true,
     sameSite: 'lax',
   },
