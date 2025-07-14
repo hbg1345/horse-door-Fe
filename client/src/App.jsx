@@ -4,6 +4,8 @@ import Home from './pages/Home';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Protected from './components/Protected';
+import KakaoRedirect from './pages/KakaoRedirect';
+import KakaoCallback from './pages/KakaoCallback';
 
 export default function App() {
   return (
@@ -18,6 +20,8 @@ export default function App() {
                 <Dashboard />
               </Protected>
             } />
+            <Route path="/auth/kakao" element={<KakaoRedirect />} />
+            <Route path="/auth/kakao/callback" element={<KakaoCallback />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
