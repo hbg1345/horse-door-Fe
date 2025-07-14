@@ -24,7 +24,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
   useEffect(() => {
     if (!chatRoom || !user) return;
 
-    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:8080', {
+    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
       withCredentials: true
     });
 
