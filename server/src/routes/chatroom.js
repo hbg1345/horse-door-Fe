@@ -561,4 +561,52 @@ router.delete('/chatrooms/:id/jury/:userId', async (req, res) => {
   }
 });
 
+// 상황설명(요약) 저장
+router.post('/chatrooms/:id/summary', async (req, res) => {
+  const { role, summary } = req.body;
+  if (!['A', 'B'].includes(role)) {
+    return res.status(400).json({ error: 'role은 A 또는 B여야 합니다.' });
+  }
+  try {
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
+    if (role === 'A') chatRoom.summaryA = summary;
+    else chatRoom.summaryB = summary;
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: '상황설명 저장 실패' });
+  }
+});
+
+// 상황설명(요약) 조회
+router.get('/chatrooms/:id/summary', async (req, res) => {
+  try {
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
+    res.json({ summaryA: chatRoom.summaryA, summaryB: chatRoom.summaryB, aiSummary: chatRoom.aiSummary });
+  } catch (e) {
+    res.status(500).json({ error: '상황설명 조회 실패' });
+  }
+});
+
+// AI 요약 생성 및 저장 (Perplexity만 사용)
+router.post('/chatrooms/:id/ai-summary', async (req, res) => {
+  try {
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
+    const { summaryA, summaryB } = chatRoom;
+    if (!summaryA || !summaryB) return res.status(400).json({ error: '두 당사자의 상황설명이 모두 필요합니다.' });
+    const prompt = `당사자A: ${summaryA}\n당사자B: ${summaryB}`;
+    const aiResult = await evaluateWithPerplexity(prompt);
+    chatRoom.aiSummary = typeof aiResult === 'string' ? aiResult : JSON.stringify(aiResult, null, 2);
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id);
+    res.json({ aiSummary: chatRoom.aiSummary });
+  } catch (e) {
+    res.status(500).json({ error: 'AI 요약 생성 실패' });
+  }
+});
+
 module.exports = router; 
