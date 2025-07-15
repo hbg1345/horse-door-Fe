@@ -495,14 +495,28 @@ export default function WaitingRoom() {
               )}
               {/* 결과창: 내부 박스에만 렌더링 */}
               {aiSummary && (
-                <textarea
-                  className="w-full h-full bg-transparent text-white font-mono text-xl sm:text-2xl border-none focus:outline-none resize-none"
-                  placeholder="AI 요약 결과가 여기에 표시됩니다."
-                  value={aiSummary}
-                  readOnly
-                  rows={12}
-                  style={{height: '100%', minHeight: 0, maxHeight: '100%', fontSize: '1.25rem', margin: 0, padding: 0, border: 'none', background: 'transparent'}}
-                />
+                (() => {
+                  let parsed = null;
+                  try {
+                    parsed = JSON.parse(aiSummary);
+                  } catch (e) {}
+                  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    return (
+                      <div className="w-full space-y-4">
+                        {Object.entries(parsed).map(([key, value]) => (
+                          <div key={key} className="flex items-start">
+                            <span className="font-bold text-green-400 min-w-[90px]">{key}</span>
+                            <span className="ml-3 text-white whitespace-pre-line">{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <pre className="w-full text-white bg-transparent font-mono text-lg whitespace-pre-wrap">{aiSummary}</pre>
+                    );
+                  }
+                })()
               )}
               {/* 스피너 안내: 내부 박스에만 렌더링 (aiRequested 중 상대방 입력이 이미 들어온 경우는 제외) */}
               {aiRequested && !aiSummary && !((isParticipantA && !summaryB.trim()) || (isParticipantB && !summaryA.trim())) && (
