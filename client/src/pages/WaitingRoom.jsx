@@ -312,6 +312,12 @@ export default function WaitingRoom() {
   const isOwner = user && room.createdBy && user.id === room.createdBy._id;
   const participantCount = room.participants?.length || 0;
 
+  // --- 디버깅용 로그 추가 ---
+  console.log('participants:', room.participants);
+  console.log('readyParticipants:', room.readyParticipants);
+  const allReady = room.participants && room.readyParticipants && room.participants.every(p => room.readyParticipants.map(String).includes(String(p._id || p.id)));
+  console.log('allReady:', allReady);
+
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#111926' }}>
       {/* 상단: 방 정보 */}
