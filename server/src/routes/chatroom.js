@@ -683,9 +683,11 @@ router.post('/chatrooms/:id/start-chat', async (req, res) => {
     if (chatRoom.createdBy.toString() !== req.user.id) {
       return res.status(403).json({ error: '방장만 채팅 시작 가능' });
     }
-    const participantIds = chatRoom.participants.map(id => id.toString());
+    // --- 방장 제외 참가자만 준비 체크 ---
+    const ownerId = chatRoom.createdBy.toString();
+    const participantIds = chatRoom.participants.map(id => id.toString()).filter(id => id !== ownerId);
     const readyIds = (chatRoom.readyParticipants || []).map(id => id.toString());
-    const allReady = participantIds.every(id => readyIds.includes(id));
+    const allReady = participantIds.length > 0 && participantIds.every(id => readyIds.includes(id));
     if (!allReady) {
       return res.status(400).json({ error: '모든 참가자가 준비되어야 합니다' });
     }
