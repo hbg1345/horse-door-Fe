@@ -600,7 +600,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
                 onChange={handleTyping}
                 placeholder="메시지를 입력하세요..."
                 className="flex-1 bg-gray-800 border border-green-400 text-green-400 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent font-mono"
-                disabled={inputDisabled || !currentTurnUserId || String(user.id) !== String(currentTurnUserId)}
+                disabled={inputDisabled || !currentTurnUserId}
               />
               <button
                 type="submit"
