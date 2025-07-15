@@ -85,6 +85,20 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('start-chat');
   });
 
+  // leave-room 이벤트 처리
+  socket.on('leave-room', ({ roomId, userId, nickname }) => {
+    // 참가자만 퇴장 메시지
+    const userInfo = connectedUsers.get(socket.id);
+    if (userInfo && userInfo.role === 'participant') {
+      socket.to(roomId).emit('user-left', { nickname });
+    }
+    connectedUsers.delete(socket.id);
+    // 대기룸/채팅방 유저 목록 갱신
+    broadcastWaitingRoomUpdate(roomId);
+    socket.leave(roomId);
+    console.log(`[leave-room] ${nickname}님이 방(${roomId})에서 나갔습니다.`);
+  });
+
   // 연결 해제
   socket.on('disconnect', () => {
     const userInfo = connectedUsers.get(socket.id);
