@@ -96,6 +96,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
   const typingTimeoutRef = useRef(null);
   const [showSpectatorChat, setShowSpectatorChat] = useState(true);
   const navigate = useNavigate(); // 추가
+  const [systemMessage, setSystemMessage] = useState('');
 
   // 스크롤을 맨 아래로
   const scrollToBottom = () => {
@@ -370,6 +371,18 @@ export default function ChatRoom({ chatRoom, onBack }) {
   // 참가자별 점수 상세 펼침 상태
   const [openScoreDetail, setOpenScoreDetail] = useState({});
 
+  useEffect(() => {
+    if (!socket) return;
+    const handleSystemMessage = ({ message }) => {
+      setSystemMessage(message);
+      setTimeout(() => setSystemMessage(''), 3000);
+    };
+    socket.on('system-message', handleSystemMessage);
+    return () => {
+      socket.off('system-message', handleSystemMessage);
+    };
+  }, [socket]);
+
   return (
     <div className="w-full h-screen bg-black flex flex-row">
       {/* 메인 채팅창 */}
@@ -608,6 +621,12 @@ export default function ChatRoom({ chatRoom, onBack }) {
           socket={socket}
           onClose={() => setShowSpectatorChat(false)}
         />
+      )}
+      {/* 안내 메시지 배너 */}
+      {systemMessage && (
+        <div className="fixed top-0 left-1/2 transform -translate-x-1/2 bg-yellow-400 text-black font-mono font-bold px-6 py-2 rounded-b shadow-lg z-50">
+          {systemMessage}
+        </div>
       )}
     </div>
   );
