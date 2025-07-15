@@ -49,6 +49,12 @@ export default function Dashboard() {
     // eslint-disable-next-line
   }, [location.state?.enterRoomId]);
 
+  useEffect(() => {
+    if (!isInChat) {
+      loadChatRooms();
+    }
+  }, [isInChat]);
+
   const loadChatRooms = async () => {
     try {
       setLoading(true);
