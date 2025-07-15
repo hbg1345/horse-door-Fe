@@ -597,11 +597,11 @@ export default function ChatRoom({ chatRoom, onBack }) {
                 onChange={handleTyping}
                 placeholder="메시지를 입력하세요..."
                 className="flex-1 bg-gray-800 border border-green-400 text-green-400 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent font-mono"
-                disabled={inputDisabled || !currentTurnUserId || user.id !== currentTurnUserId}
+                disabled={inputDisabled || !currentTurnUserId || String(user.id) !== String(currentTurnUserId)}
               />
               <button
                 type="submit"
-                disabled={!newMessage.trim() || inputDisabled || !currentTurnUserId || user.id !== currentTurnUserId}
+                disabled={!newMessage.trim() || inputDisabled || !currentTurnUserId || String(user.id) !== String(currentTurnUserId)}
                 className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-black py-3 px-6 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-green-400 hover:border-green-300"
               >
                 전송
