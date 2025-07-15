@@ -153,16 +153,16 @@ io.on('connection', (socket) => {
 
   // 채팅 시작(강제 이동, 턴제 시작)
   socket.on('start-chat', async ({ roomId }) => {
-    // 실제 소켓방 인원 체크
-    const roomSockets = io.sockets.adapter.rooms.get(roomId);
-    if (!roomSockets || roomSockets.size < 2) {
-      io.to(roomId).emit('system-message', { message: '실제 접속 인원이 2명 이상일 때만 채팅이 시작됩니다.' });
-      return;
-    }
+    // 기존: 실제 소켓방 인원 체크
+    // const roomSockets = io.sockets.adapter.rooms.get(roomId);
+    // if (!roomSockets || roomSockets.size < 2) {
+    //   io.to(roomId).emit('system-message', { message: '실제 접속 인원이 2명 이상일 때만 채팅이 시작됩니다.' });
+    //   return;
+    // }
     // 방장 userId 찾기
     const chatRoom = await ChatRoom.findById(roomId).populate('createdBy').populate('participants');
     if (!chatRoom || !chatRoom.createdBy) return;
-    // --- 수정: 턴 상태/turn-changed emit 제거, start-chat만 emit ---
+    // --- 수정: 인원수 제한 없이 start-chat emit ---
     io.to(roomId).emit('start-chat');
   });
 
