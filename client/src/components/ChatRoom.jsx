@@ -342,6 +342,28 @@ export default function ChatRoom({ chatRoom, onBack }) {
     if (onBack) onBack();
   };
 
+  // 참가자별 총점 계산 함수
+  function getParticipantTotalScore(messages, userId) {
+    return messages
+      .filter(msg => msg.userId === userId && msg.score)
+      .reduce((sum, msg) => sum + Object.values(msg.score).reduce((a, b) => a + b, 0), 0);
+  }
+
+  // 참가자별 항목별 점수 합계 계산 함수
+  function getParticipantScoreSums(messages, userId) {
+    const sums = {};
+    messages
+      .filter(msg => msg.userId === userId && msg.score)
+      .forEach(msg => {
+        for (const [key, value] of Object.entries(msg.score)) {
+          sums[key] = (sums[key] || 0) + value;
+        }
+      });
+    return sums;
+  }
+  // 참가자별 점수 상세 펼침 상태
+  const [openScoreDetail, setOpenScoreDetail] = useState({});
+
   return (
     <div className="w-full h-screen bg-black flex flex-row">
       {/* 메인 채팅창 */}
@@ -445,14 +467,98 @@ export default function ChatRoom({ chatRoom, onBack }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 남은 시간 표시 */}
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
-          <div className="bg-black bg-opacity-80 px-6 py-2 rounded-full border-2 border-green-400 text-2xl font-mono text-green-300 font-bold shadow-lg">
-            {timeLeft >= 1
-              ? Math.ceil(timeLeft) + '초'
-              : timeLeft > 0
-                ? timeLeft.toFixed(3) + '초'
-                : '0초'}
+        {/* 남은 시간 표시 + 참가자별 총점 */}
+        <div className="absolute top-4 left-0 w-full flex justify-between items-start z-20 px-8 pointer-events-none">
+          {/* 왼쪽 참가자 (파랑) */}
+          <div className="flex flex-col items-end flex-1 pointer-events-auto">
+            {chatRoom.participants?.[0] && (() => {
+              const user = chatRoom.participants[0];
+              const userId = user._id || user.id;
+              const score = getParticipantTotalScore(messages, userId);
+              const scoreSums = getParticipantScoreSums(messages, userId);
+              return (
+                <>
+                  <span className="flex items-center gap-2 px-4 py-2 rounded-full bg-white shadow font-mono text-lg border border-gray-200">
+                    <span className="text-yellow-400 text-xl">🏆</span>
+                    <span className="text-gray-800 font-semibold">{user.nickname}</span>
+                    <span className="ml-1 text-blue-500 font-extrabold text-xl">{score}</span>
+                    <button
+                      onClick={() => setOpenScoreDetail(prev => ({ ...prev, [userId]: !prev[userId] }))}
+                      className="ml-2 text-xs text-gray-500 hover:text-gray-800 focus:outline-none"
+                      title="항목별 점수 보기"
+                    >
+                      ▼
+                    </button>
+                  </span>
+                  {openScoreDetail[userId] && (
+                    <div className="mt-1 flex flex-col bg-gray-50 rounded px-2 py-1 border font-mono text-gray-700 shadow w-max">
+                      {Object.entries(scoreSums).map(([k, v]) => (
+                        <span key={k} className="mb-1 last:mb-0">{k}: <b>{v}</b></span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+          {/* 타이머 (항상 중앙) + 점수차 */}
+          <div className="flex-shrink-0 flex flex-col items-center pointer-events-auto" style={{ minWidth: 160 }}>
+            <div className="bg-black bg-opacity-80 px-6 py-2 rounded-full border-2 border-green-400 text-2xl font-mono text-green-300 font-bold shadow-lg">
+              {timeLeft >= 1
+                ? Math.ceil(timeLeft) + '초'
+                : timeLeft > 0
+                  ? timeLeft.toFixed(3) + '초'
+                  : '0초'}
+            </div>
+            {/* 점수차 표시 */}
+            {chatRoom.participants?.[0] && chatRoom.participants?.[1] && (() => {
+              const leftUser = chatRoom.participants[0];
+              const rightUser = chatRoom.participants[1];
+              const leftScore = getParticipantTotalScore(messages, leftUser._id || leftUser.id);
+              const rightScore = getParticipantTotalScore(messages, rightUser._id || rightUser.id);
+              const diff = leftScore - rightScore;
+              return (
+                <div className="mt-1 text-sm font-mono text-gray-500 font-bold">
+                  {diff === 0
+                    ? '동점!'
+                    : diff > 0
+                      ? `${leftUser.nickname} +${diff}점 리드`
+                      : `${rightUser.nickname} +${-diff}점 리드`}
+                </div>
+              );
+            })()}
+          </div>
+          {/* 오른쪽 참가자 (빨강) */}
+          <div className="flex flex-col items-start flex-1 pointer-events-auto">
+            {chatRoom.participants?.[1] && (() => {
+              const user = chatRoom.participants[1];
+              const userId = user._id || user.id;
+              const score = getParticipantTotalScore(messages, userId);
+              const scoreSums = getParticipantScoreSums(messages, userId);
+              return (
+                <>
+                  <span className="flex items-center gap-2 px-4 py-2 rounded-full bg-white shadow font-mono text-lg border border-gray-200">
+                    <span className="text-yellow-400 text-xl">🏆</span>
+                    <span className="text-gray-800 font-semibold">{user.nickname}</span>
+                    <span className="ml-1 text-red-500 font-extrabold text-xl">{score}</span>
+                    <button
+                      onClick={() => setOpenScoreDetail(prev => ({ ...prev, [userId]: !prev[userId] }))}
+                      className="ml-2 text-xs text-gray-500 hover:text-gray-800 focus:outline-none"
+                      title="항목별 점수 보기"
+                    >
+                      ▼
+                    </button>
+                  </span>
+                  {openScoreDetail[userId] && (
+                    <div className="mt-1 flex flex-col bg-gray-50 rounded px-2 py-1 border font-mono text-gray-700 shadow w-max">
+                      {Object.entries(scoreSums).map(([k, v]) => (
+                        <span key={k} className="mb-1 last:mb-0">{k}: <b>{v}</b></span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 

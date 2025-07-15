@@ -301,9 +301,8 @@ export default function WaitingRoom() {
                 socketRef.current.emit('start-chat', { roomId });
               }
             }}
-            disabled={participantCount < 2}
           >
-            {participantCount < 2 ? '참가자 2명 필요' : '채팅 시작'}
+            채팅 시작
           </button>
         )}
       </div>
