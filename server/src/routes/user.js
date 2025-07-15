@@ -7,6 +7,8 @@ const { KAKAO_CLIENT_ID } = require('../config/env');
 const router = Router();
 
 router.get('/user', (req,res)=>{
+  console.log('[API USER] req.user:', req.user);
+  console.log('[API USER] req.session:', req.session);
   if (!req.user) return res.json({ isAuthenticated:false });
   const { _id, isRegistered, nickname, avatarUrl } = req.user;
   res.json({ id: _id, isAuthenticated:true, isRegistered, nickname, avatarUrl });

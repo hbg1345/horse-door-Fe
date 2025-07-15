@@ -17,12 +17,9 @@ router.get('/kakao/callback',
     failureRedirect: CLIENT_URL,
   }),
   (req, res) => {
-    // 세션이 생성된 상태에서 프론트로 리다이렉트
-    if (req.user.isRegistered) {
+    console.log('[KAKAO CALLBACK] req.user:', req.user);
+    console.log('[KAKAO CALLBACK] req.session:', req.session);
     res.redirect(`${CLIENT_URL}/dashboard`);
-    } else {
-    res.redirect(`${CLIENT_URL}/register`);
-    }
   }
 );
 

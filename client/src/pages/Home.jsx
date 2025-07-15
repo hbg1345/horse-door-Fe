@@ -6,13 +6,15 @@ import { useEffect } from 'react';
 export default function Home() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-
   useEffect(() => {
+    console.log("useEffect",user);
     if (!loading && user) {
+      console.log(user.isAuthenticated, user.isRegistered);
       if (user.isAuthenticated && user.isRegistered) {
         navigate('/dashboard');
       } else if (user.isAuthenticated && !user.isRegistered) {
-        navigate('/register');
+        // navigate('/register');
+        console.log("navigated to register", user)
       }
     }
   }, [user, loading, navigate]);
