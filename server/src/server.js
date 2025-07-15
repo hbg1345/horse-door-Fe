@@ -24,6 +24,36 @@ const connectedUsers = new Map(); // socketId -> { userId, nickname, roomId }
 // roomId별 턴/타이머 상태 저장
 const turnStateMap = new Map(); // roomId -> { currentTurnUserId, timer, timerRef }
 
+// --- 배심원 투표 상태 저장 ---
+const juryVoteStateMap = new Map(); // roomId -> { votes: {userId: 'A'|'B'}, timerRef, timeLeft }
+
+// --- game-ended 이후 배심원 투표 시작 함수 ---
+async function startJuryVote(roomId, winnerUserId, loserUserId) {
+  // 참가자 2명, 배심원 1명 이상일 때만
+  const chatRoom = await ChatRoom.findById(roomId).populate('participants').populate('jury');
+  if (!chatRoom || chatRoom.participants.length !== 2 || !chatRoom.jury || chatRoom.jury.length === 0) return;
+  // 투표 상태 초기화
+  juryVoteStateMap.set(roomId, { votes: {}, timeLeft: 10 });
+  io.to(roomId).emit('start-jury-vote', {
+    participants: chatRoom.participants.map(u => ({ id: u._id.toString(), nickname: u.nickname })),
+    jury: chatRoom.jury.map(u => ({ id: u._id.toString(), nickname: u.nickname })),
+    timeLeft: 10
+  });
+  // 10초 타이머
+  const timerRef = setInterval(() => {
+    const state = juryVoteStateMap.get(roomId);
+    if (!state) return;
+    state.timeLeft -= 1;
+    io.to(roomId).emit('jury-vote-update', { votes: state.votes, timeLeft: state.timeLeft });
+    if (state.timeLeft <= 0) {
+      clearInterval(timerRef);
+      io.to(roomId).emit('jury-vote-ended', { votes: state.votes });
+      juryVoteStateMap.delete(roomId);
+    }
+  }, 1000);
+  juryVoteStateMap.get(roomId).timerRef = timerRef;
+}
+
 function broadcastWaitingRoomUpdate(roomId) {
   io.to(roomId).emit('waiting-room-update');
 }
@@ -43,19 +73,20 @@ io.on('connection', (socket) => {
     // --- 추가: 참가자 2명 모두 입장 시 턴 시작 ---
     // 참가자 목록 확인
     const roomSockets = io.sockets.adapter.rooms.get(roomId);
-    if (roomSockets && roomSockets.size === 2) { // 실제 소켓방 인원 2명 체크
+    if (roomSockets && (roomSockets.size === 2 || roomSockets.size === 1)) { // 1명 또는 2명
       // 현재 소켓방에 참가자 userId만 추출
       const participantUserIds = Array.from(roomSockets)
         .map(sid => connectedUsers.get(sid))
         .filter(u => u && u.roomId === roomId && u.role === 'participant')
         .map(u => u.userId);
-      if (participantUserIds.length === 2) {
+      if (participantUserIds.length === 1 || participantUserIds.length === 2) {
         // 턴 상태가 이미 시작된 방은 중복 emit 방지
         if (!turnStateMap.has(roomId) || !turnStateMap.get(roomId).currentTurnUserId) {
           // DB에서 방장 userId 찾기
           const chatRoom = await ChatRoom.findById(roomId).populate('createdBy');
           if (!chatRoom || !chatRoom.createdBy) return;
-          const ownerId = chatRoom.createdBy._id.toString();
+          // 참가자가 1명이면 그 사람, 2명이면 방장
+          const ownerId = participantUserIds.length === 1 ? participantUserIds[0] : chatRoom.createdBy._id.toString();
           if (!turnStateMap.has(roomId)) turnStateMap.set(roomId, {});
           const state = turnStateMap.get(roomId);
           state.currentTurnUserId = ownerId;
@@ -90,14 +121,12 @@ io.on('connection', (socket) => {
     ChatRoom.findById(msg.roomId).populate('participants').then(chatRoom => {
       if (!chatRoom) return;
       const users = chatRoom.participants.map(u => u._id.toString());
-      if (users.length !== 2) {
-        io.to(msg.roomId).emit('system-message', { message: '참가자 2명일 때만 채팅이 가능합니다.' });
-        return;
-      }
+      // --- 참가자 2명 체크 제거 ---
       // 메시지 전송
       io.to(msg.roomId).emit('new-message', msg);
-      // 턴 전환
-      const nextTurnUserId = users.find(id => id !== msg.userId);
+      // 턴 전환: 상대가 없으면 다시 내 턴, 있으면 상대 턴
+      let nextTurnUserId = users.find(id => id !== msg.userId);
+      if (!nextTurnUserId) nextTurnUserId = msg.userId; // 혼자면 내 턴 반복
       state.currentTurnUserId = nextTurnUserId;
       state.timer = 10;
       // 타이머 리셋
@@ -107,6 +136,21 @@ io.on('connection', (socket) => {
         if (state.timer <= 0) {
           clearInterval(state.timerRef);
           io.to(msg.roomId).emit('turn-timeout', { loserUserId: String(state.currentTurnUserId) });
+          // --- 게임 종료: 제한시간 초과 즉시 패배 ---
+          // 승자 계산: 참가자 2명 중 loserUserId가 아닌 사람이 승자, 혼자면 loserUserId=winnerUserId
+          ChatRoom.findById(msg.roomId).populate('participants').then(chatRoom2 => {
+            if (!chatRoom2) return;
+            const users2 = chatRoom2.participants.map(u => u._id.toString());
+            const loserUserId = String(state.currentTurnUserId);
+            let winnerUserId = users2.find(id => id !== loserUserId);
+            if (!winnerUserId) winnerUserId = loserUserId; // 혼자면 승자=패자
+            io.to(msg.roomId).emit('game-ended', {
+              winnerUserId,
+              loserUserId,
+              reason: 'timeout'
+            });
+            startJuryVote(msg.roomId, winnerUserId, loserUserId);
+          });
         } else {
           io.to(msg.roomId).emit('turn-timer', { timeLeft: Math.max(0, +state.timer.toFixed(3)), currentTurnUserId: String(state.currentTurnUserId) });
         }
@@ -121,6 +165,52 @@ io.on('connection', (socket) => {
   socket.on('update-score', ({ id, roomId, score }) => {
     // DB 업데이트 생략 (메모리 기반)
     io.to(roomId).emit('update-score', { id, score });
+    // --- 게임 종료: 점수차 100점 이상 즉시 승패 ---
+    // 참가자별 총점 계산
+    ChatRoom.findById(roomId).populate('participants').then(chatRoom => {
+      if (!chatRoom) return;
+      const users = chatRoom.participants.map(u => u._id.toString());
+      // 각 참가자별 총점 계산
+      const userScores = {};
+      users.forEach(uid => { userScores[uid] = 0; });
+      if (!turnStateMap.get(roomId).messages) turnStateMap.get(roomId).messages = [];
+      const messages = turnStateMap.get(roomId).messages;
+      const msgIdx = messages.findIndex(m => m && m.id === id);
+      if (msgIdx >= 0) {
+        messages[msgIdx].score = score;
+      } else {
+        messages.push({ id, userId: id, score }); // userId는 실제로는 msg.userId여야 함(간략화)
+      }
+      messages.forEach(m => {
+        if (m && m.userId && m.score && userScores[m.userId] !== undefined) {
+          userScores[m.userId] += Object.values(m.score).reduce((a, b) => a + b, 0);
+        }
+      });
+      // 점수차 체크: 상대가 없으면 0점 처리
+      if (users.length === 1) {
+        if (userScores[users[0]] >= 100) {
+          io.to(roomId).emit('game-ended', {
+            winnerUserId: users[0],
+            loserUserId: users[0],
+            reason: 'score-diff'
+          });
+          startJuryVote(roomId, users[0], users[0]);
+        }
+      } else if (users.length === 2) {
+        const [uid1, uid2] = users;
+        const diff = Math.abs(userScores[uid1] - userScores[uid2]);
+        if (diff >= 100) {
+          const winnerUserId = userScores[uid1] > userScores[uid2] ? uid1 : uid2;
+          const loserUserId = userScores[uid1] > userScores[uid2] ? uid2 : uid1;
+          io.to(roomId).emit('game-ended', {
+            winnerUserId,
+            loserUserId,
+            reason: 'score-diff'
+          });
+          startJuryVote(roomId, winnerUserId, loserUserId);
+        }
+      }
+    });
   });
 
   // 타이핑 상태
@@ -164,6 +254,14 @@ io.on('connection', (socket) => {
     if (!chatRoom || !chatRoom.createdBy) return;
     // --- 수정: 인원수 제한 없이 start-chat emit ---
     io.to(roomId).emit('start-chat');
+  });
+
+  // 배심원 투표 이벤트 처리
+  socket.on('jury-vote', ({ roomId, juryUserId, voteUserId }) => {
+    const state = juryVoteStateMap.get(roomId);
+    if (!state) return;
+    state.votes[juryUserId] = voteUserId;
+    io.to(roomId).emit('jury-vote-update', { votes: state.votes, timeLeft: state.timeLeft });
   });
 
   // leave-room 이벤트 처리
