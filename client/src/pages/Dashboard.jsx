@@ -6,6 +6,16 @@ import ChatRoom from '../components/ChatRoom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
 
+// 대기룸에서 사용하는 예쁜 로딩 오버레이 컴포넌트 복사
+function LoadingOverlay() {
+  return (
+    <div className="absolute inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center z-20 rounded-xl">
+      <div className="w-12 h-12 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <div className="text-green-300 font-mono text-lg">로딩 중...</div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [logoutLoading, setLogoutLoading] = useState(false);
@@ -164,10 +174,11 @@ export default function Dashboard() {
         </div>
         
         {/* 채팅방 목록 */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto relative">
           {loading ? (
-            <div className="p-4 text-center">
-              <div className="text-green-400 font-mono">로딩 중...</div>
+            <div className="relative h-full min-h-[200px]">
+              <LoadingOverlay />
+              <div style={{ height: 200 }} />
             </div>
           ) : error ? (
             <div className="p-4 text-center">
