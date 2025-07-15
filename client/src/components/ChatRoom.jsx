@@ -97,6 +97,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
   const [showSpectatorChat, setShowSpectatorChat] = useState(true);
   const navigate = useNavigate(); // 추가
   const [systemMessage, setSystemMessage] = useState('');
+  const [gameResult, setGameResult] = useState(null); // 반드시 최상단에 위치
 
   // 스크롤을 맨 아래로
   const scrollToBottom = () => {
@@ -387,6 +388,42 @@ export default function ChatRoom({ chatRoom, onBack }) {
     };
   }, [socket]);
 
+  // 배심원 투표 상태
+  const [juryVote, setJuryVote] = useState(null); // { participants, jury, timeLeft, votes, ended }
+  const [myJuryVote, setMyJuryVote] = useState(null); // 내가 투표한 참가자 id
+  const { user: authUser } = useAuth();
+
+  useEffect(() => {
+    if (!socket) return;
+    // 기존 이벤트 핸들러 ...
+    // --- 배심원 투표 이벤트 수신 ---
+    const handleStartJuryVote = ({ participants, jury, timeLeft }) => {
+      setJuryVote({ participants, jury, timeLeft, votes: {}, ended: false });
+      setMyJuryVote(null);
+    };
+    const handleJuryVoteUpdate = ({ votes, timeLeft }) => {
+      setJuryVote(prev => prev ? { ...prev, votes, timeLeft } : null);
+    };
+    const handleJuryVoteEnded = ({ votes }) => {
+      setJuryVote(prev => prev ? { ...prev, votes, ended: true } : null);
+    };
+    socket.on('start-jury-vote', handleStartJuryVote);
+    socket.on('jury-vote-update', handleJuryVoteUpdate);
+    socket.on('jury-vote-ended', handleJuryVoteEnded);
+    return () => {
+      socket.off('start-jury-vote', handleStartJuryVote);
+      socket.off('jury-vote-update', handleJuryVoteUpdate);
+      socket.off('jury-vote-ended', handleJuryVoteEnded);
+    };
+  }, [socket]);
+
+  // 배심원 투표 제출
+  const handleJuryVote = (voteUserId) => {
+    if (!juryVote || !chatRoom || !user) return;
+    setMyJuryVote(voteUserId);
+    socket.emit('jury-vote', { roomId: chatRoom._id, juryUserId: user.id, voteUserId });
+  };
+
   return (
     <div className="w-full h-screen bg-black flex flex-row">
       {/* 메인 채팅창 */}
@@ -635,6 +672,66 @@ export default function ChatRoom({ chatRoom, onBack }) {
       {systemMessage && (
         <div className="fixed top-0 left-1/2 transform -translate-x-1/2 bg-yellow-400 text-black font-mono font-bold px-6 py-2 rounded-b shadow-lg z-50">
           {systemMessage}
+        </div>
+      )}
+      {/* 게임 종료 모달 */}
+      {gameResult && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 min-w-[320px] flex flex-col items-center">
+            <h2 className="text-2xl font-bold mb-4 text-green-600 font-mono">게임 종료</h2>
+            <div className="mb-4 text-lg font-mono">
+              {gameResult.winnerUserId === user.id
+                ? '🎉 승리하셨습니다!'
+                : gameResult.loserUserId === user.id
+                ? '😢 패배하셨습니다.'
+                : '게임이 종료되었습니다.'}
+            </div>
+            <div className="mb-2 text-gray-700 font-mono">
+              종료 사유: {gameResult.reason === 'timeout' ? '제한시간 초과' : '점수차 100점 이상'}
+            </div>
+            <button
+              className="mt-4 px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded font-bold font-mono"
+              onClick={() => setGameResult(null)}
+            >
+              확인 (배심원 투표로 이동)
+            </button>
+          </div>
+        </div>
+      )}
+      {/* 배심원 투표 패널 */}
+      {juryVote && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 min-w-[340px] flex flex-col items-center">
+            <h2 className="text-xl font-bold mb-4 text-purple-700 font-mono">배심원 투표</h2>
+            <div className="mb-2 text-gray-700 font-mono">남은 시간: <span className="font-bold text-lg">{juryVote.timeLeft}</span>초</div>
+            <div className="mb-4 text-gray-700 font-mono">누가 더 잘했나요?</div>
+            <div className="flex gap-4 mb-4">
+              {juryVote.participants.map(p => (
+                <button
+                  key={p.id}
+                  className={`px-6 py-2 rounded font-bold font-mono border-2 transition-all duration-150 ${myJuryVote === p.id ? 'bg-purple-600 text-white border-purple-700' : 'bg-white text-purple-700 border-purple-400 hover:bg-purple-100'}`}
+                  disabled={!!myJuryVote || juryVote.ended}
+                  onClick={() => handleJuryVote(p.id)}
+                >
+                  {p.nickname}
+                </button>
+              ))}
+            </div>
+            <div className="w-full mb-2">
+              <div className="text-gray-700 font-mono mb-1">실시간 투표 현황</div>
+              <div className="flex gap-4 justify-center">
+                {juryVote.participants.map(p => (
+                  <div key={p.id} className="flex flex-col items-center">
+                    <span className="font-bold text-purple-700">{p.nickname}</span>
+                    <span className="text-lg font-mono">{Object.values(juryVote.votes || {}).filter(v => v === p.id).length}표</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {juryVote.ended && (
+              <div className="mt-4 text-lg font-mono font-bold text-green-700">투표가 종료되었습니다.</div>
+            )}
+          </div>
         </div>
       )}
     </div>
