@@ -43,7 +43,7 @@ io.on('connection', (socket) => {
     // --- 추가: 참가자 2명 모두 입장 시 턴 시작 ---
     // 참가자 목록 확인
     const roomSockets = io.sockets.adapter.rooms.get(roomId);
-    if (roomSockets) {
+    if (roomSockets && roomSockets.size === 2) { // 실제 소켓방 인원 2명 체크
       // 현재 소켓방에 참가자 userId만 추출
       const participantUserIds = Array.from(roomSockets)
         .map(sid => connectedUsers.get(sid))
@@ -174,6 +174,10 @@ io.on('connection', (socket) => {
       socket.to(roomId).emit('user-left', { nickname });
     }
     connectedUsers.delete(socket.id);
+    // --- 추가: 참가자 나가면 턴 상태 리셋 ---
+    if (turnStateMap.has(roomId)) {
+      turnStateMap.get(roomId).currentTurnUserId = null;
+    }
     // DB에서 해당 유저를 참가자/배심원에서 제거
     try {
       const chatRoom = await ChatRoom.findById(roomId);
@@ -219,6 +223,10 @@ io.on('connection', (socket) => {
       // 오직 참가자만 퇴장 메시지
       if (userInfo.role === 'participant') {
         socket.to(userInfo.roomId).emit('user-left', { nickname: userInfo.nickname });
+      }
+      // --- 추가: 연결 해제 시 턴 상태 리셋 ---
+      if (userInfo.roomId && turnStateMap.has(userInfo.roomId)) {
+        turnStateMap.get(userInfo.roomId).currentTurnUserId = null;
       }
       connectedUsers.delete(socket.id);
       console.log(`${userInfo.nickname}님이 연결을 해제했습니다.`);
