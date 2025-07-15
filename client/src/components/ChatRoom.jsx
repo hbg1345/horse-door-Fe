@@ -85,18 +85,33 @@ export default function ChatRoom({ chatRoom, onBack }) {
     let geminiScore = null;
     let avgScore = null;
     try {
-      [perplexityScore, geminiScore] = await Promise.all([
+      const results = await Promise.allSettled([
         evaluateMessage(newMessage.trim()),
         evaluateMessageWithGemini(newMessage.trim())
       ]);
-      // 두 점수의 각 항목별 평균 계산
-      if (perplexityScore && geminiScore) {
+      
+      // Perplexity는 항상 성공한다고 가정
+      perplexityScore = results[0].value;
+      
+      // Gemini 결과 처리
+      if (results[1].status === 'fulfilled') {
+        geminiScore = results[1].value;
+      } else {
+        console.error('Gemini 평가 실패:', results[1].reason);
+      }
+      
+      // 평균 계산 (Gemini가 실패하면 Perplexity만 사용)
+      if (geminiScore) {
+        // Gemini도 성공한 경우 평균 계산
         avgScore = {};
         for (const key of Object.keys(perplexityScore)) {
           if (geminiScore[key] !== undefined) {
             avgScore[key] = Number(((perplexityScore[key] + geminiScore[key]) / 2).toFixed(1));
           }
         }
+      } else {
+        // Gemini가 실패한 경우 Perplexity 결과만 사용
+        avgScore = perplexityScore;
       }
     } catch (err) {
       console.error('메시지 평가 실패:', err);
