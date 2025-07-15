@@ -116,15 +116,16 @@ io.on('connection', (socket) => {
 
   // 채팅 시작(강제 이동, 턴제 시작)
   socket.on('start-chat', async ({ roomId }) => {
+    // 실제 소켓방 인원 체크
+    const roomSockets = io.sockets.adapter.rooms.get(roomId);
+    if (!roomSockets || roomSockets.size < 2) {
+      io.to(roomId).emit('system-message', { message: '실제 접속 인원이 2명 이상일 때만 채팅이 시작됩니다.' });
+      return;
+    }
     // 방장 userId 찾기
     const chatRoom = await ChatRoom.findById(roomId).populate('createdBy').populate('participants');
     if (!chatRoom || !chatRoom.createdBy) return;
     const ownerId = chatRoom.createdBy._id.toString();
-    // 참가자 2명 아닐 때 안내
-    if (!chatRoom.participants || chatRoom.participants.length !== 2) {
-      io.to(roomId).emit('system-message', { message: '참가자 2명일 때만 채팅이 시작됩니다.' });
-      return;
-    }
     // 턴 상태 초기화
     if (!turnStateMap.has(roomId)) turnStateMap.set(roomId, {});
     const state = turnStateMap.get(roomId);
