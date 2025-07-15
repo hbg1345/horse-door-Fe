@@ -29,14 +29,13 @@ const juryVoteStateMap = new Map(); // roomId -> { votes: {userId: 'A'|'B'}, tim
 
 // --- game-ended 이후 배심원 투표 시작 함수 ---
 async function startJuryVote(roomId, winnerUserId, loserUserId) {
-  // 참가자 1명 이상일 때만
   const chatRoom = await ChatRoom.findById(roomId).populate('participants').populate('jury');
   if (!chatRoom || chatRoom.participants.length < 1) return;
-  // jury가 0명이어도 emit
+  console.log('[startJuryVote] emit', roomId, '참가자:', chatRoom.participants.map(u => u.nickname).join(','), '배심원:', chatRoom.jury.map(u => u.nickname).join(','));
   juryVoteStateMap.set(roomId, { votes: {}, timeLeft: 10 });
   io.to(roomId).emit('start-jury-vote', {
     participants: chatRoom.participants.map(u => ({ id: u._id.toString(), nickname: u.nickname })),
-    jury: chatRoom.jury.map(u => ({ id: u._id.toString(), nickname: u.nickname })), // 0명일 수도 있음
+    jury: chatRoom.jury.map(u => ({ id: u._id.toString(), nickname: u.nickname })),
     timeLeft: 10
   });
   // 10초 타이머

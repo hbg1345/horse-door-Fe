@@ -398,6 +398,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
     // 기존 이벤트 핸들러 ...
     // --- 배심원 투표 이벤트 수신 ---
     const handleStartJuryVote = ({ participants, jury, timeLeft }) => {
+      console.log('[start-jury-vote] 이벤트 수신', participants, jury, timeLeft);
       setJuryVote({ participants, jury, timeLeft, votes: {}, ended: false });
       setMyJuryVote(null);
     };
