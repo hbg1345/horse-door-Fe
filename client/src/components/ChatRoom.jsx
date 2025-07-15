@@ -517,8 +517,12 @@ export default function ChatRoom({ chatRoom, onBack }) {
               const leftScore = getParticipantTotalScore(messages, leftUser._id || leftUser.id);
               const rightScore = getParticipantTotalScore(messages, rightUser._id || rightUser.id);
               const diff = leftScore - rightScore;
+              let diffClass = '';
+              if (diff === 0) diffClass = 'text-yellow-500';
+              else if (diff > 0) diffClass = 'text-blue-500';
+              else diffClass = 'text-red-500';
               return (
-                <div className="mt-1 text-sm font-mono text-gray-500 font-bold">
+                <div className={`mt-1 text-sm font-mono font-bold ${diffClass}`}>
                   {diff === 0
                     ? '동점!'
                     : diff > 0
