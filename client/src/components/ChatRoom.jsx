@@ -312,6 +312,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
     if (!socket) return;
     // 턴 변경
     const handleTurnChanged = ({ currentTurnUserId }) => {
+      console.log('turn-changed:', currentTurnUserId); // 디버깅용
       setCurrentTurnUserId(currentTurnUserId);
     };
     // 타이머 동기화
@@ -407,6 +408,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
             <button
               onClick={handleLeaveRoom}
               className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-gray-500 hover:border-gray-400"
+              disabled={false}
             >
               나가기
             </button>
@@ -595,11 +597,11 @@ export default function ChatRoom({ chatRoom, onBack }) {
                 onChange={handleTyping}
                 placeholder="메시지를 입력하세요..."
                 className="flex-1 bg-gray-800 border border-green-400 text-green-400 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent font-mono"
-                disabled={inputDisabled || user.id !== currentTurnUserId}
+                disabled={inputDisabled || !currentTurnUserId || user.id !== currentTurnUserId}
               />
               <button
                 type="submit"
-                disabled={!newMessage.trim() || inputDisabled || user.id !== currentTurnUserId}
+                disabled={!newMessage.trim() || inputDisabled || !currentTurnUserId || user.id !== currentTurnUserId}
                 className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-black py-3 px-6 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-green-400 hover:border-green-300"
               >
                 전송
@@ -609,6 +611,10 @@ export default function ChatRoom({ chatRoom, onBack }) {
             <div className="text-center text-gray-400 font-mono py-2">
               배심원은 채팅 입력이 불가합니다. (관전만 가능)
             </div>
+          )}
+          {/* 턴 정보 동기화 안내 */}
+          {!currentTurnUserId && (
+            <div className="text-center text-yellow-400 font-mono mt-2">턴 정보 동기화 중...</div>
           )}
         </div>
       </div>
