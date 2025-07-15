@@ -90,7 +90,7 @@ io.on('connection', (socket) => {
           if (!turnStateMap.has(roomId)) turnStateMap.set(roomId, {});
           const state = turnStateMap.get(roomId);
           state.currentTurnUserId = ownerId;
-          state.timer = 10;
+          state.timer = 20;
           // 타이머 시작
           if (state.timerRef) clearInterval(state.timerRef);
           state.timerRef = setInterval(() => {
@@ -128,7 +128,7 @@ io.on('connection', (socket) => {
       let nextTurnUserId = users.find(id => id !== msg.userId);
       if (!nextTurnUserId) nextTurnUserId = msg.userId; // 혼자면 내 턴 반복
       state.currentTurnUserId = nextTurnUserId;
-      state.timer = 10;
+      state.timer = 20;
       // 타이머 리셋
       if (state.timerRef) clearInterval(state.timerRef);
       state.timerRef = setInterval(() => {

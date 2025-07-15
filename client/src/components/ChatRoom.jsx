@@ -300,7 +300,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
   };
 
   // 채팅 입력 타이머 상태
-  const CHAT_TIME_LIMIT = 10; // 초
+  const CHAT_TIME_LIMIT = 20; // 초
   const [timeLeft, setTimeLeft] = useState(CHAT_TIME_LIMIT);
   const [inputDisabled, setInputDisabled] = useState(false);
   const timerRef = useRef();
