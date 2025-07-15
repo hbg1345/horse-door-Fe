@@ -703,33 +703,41 @@ export default function ChatRoom({ chatRoom, onBack }) {
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-8 min-w-[340px] flex flex-col items-center">
             <h2 className="text-xl font-bold mb-4 text-purple-700 font-mono">배심원 투표</h2>
-            <div className="mb-2 text-gray-700 font-mono">남은 시간: <span className="font-bold text-lg">{juryVote.timeLeft}</span>초</div>
-            <div className="mb-4 text-gray-700 font-mono">누가 더 잘했나요?</div>
-            <div className="flex gap-4 mb-4">
-              {juryVote.participants.map(p => (
-                <button
-                  key={p.id}
-                  className={`px-6 py-2 rounded font-bold font-mono border-2 transition-all duration-150 ${myJuryVote === p.id ? 'bg-purple-600 text-white border-purple-700' : 'bg-white text-purple-700 border-purple-400 hover:bg-purple-100'}`}
-                  disabled={!!myJuryVote || juryVote.ended}
-                  onClick={() => handleJuryVote(p.id)}
-                >
-                  {p.nickname}
-                </button>
-              ))}
-            </div>
-            <div className="w-full mb-2">
-              <div className="text-gray-700 font-mono mb-1">실시간 투표 현황</div>
-              <div className="flex gap-4 justify-center">
-                {juryVote.participants.map(p => (
-                  <div key={p.id} className="flex flex-col items-center">
-                    <span className="font-bold text-purple-700">{p.nickname}</span>
-                    <span className="text-lg font-mono">{Object.values(juryVote.votes || {}).filter(v => v === p.id).length}표</span>
-                  </div>
-                ))}
+            {juryVote.jury && juryVote.jury.length === 0 ? (
+              <div className="text-gray-500 font-mono text-lg mt-4">
+                배심원이 없어 투표가 진행되지 않습니다.
               </div>
-            </div>
-            {juryVote.ended && (
-              <div className="mt-4 text-lg font-mono font-bold text-green-700">투표가 종료되었습니다.</div>
+            ) : (
+              <>
+                <div className="mb-2 text-gray-700 font-mono">남은 시간: <span className="font-bold text-lg">{juryVote.timeLeft}</span>초</div>
+                <div className="mb-4 text-gray-700 font-mono">누가 더 잘했나요?</div>
+                <div className="flex gap-4 mb-4">
+                  {juryVote.participants.map(p => (
+                    <button
+                      key={p.id}
+                      className={`px-6 py-2 rounded font-bold font-mono border-2 transition-all duration-150 ${myJuryVote === p.id ? 'bg-purple-600 text-white border-purple-700' : 'bg-white text-purple-700 border-purple-400 hover:bg-purple-100'}`}
+                      disabled={!!myJuryVote || juryVote.ended}
+                      onClick={() => handleJuryVote(p.id)}
+                    >
+                      {p.nickname}
+                    </button>
+                  ))}
+                </div>
+                <div className="w-full mb-2">
+                  <div className="text-gray-700 font-mono mb-1">실시간 투표 현황</div>
+                  <div className="flex gap-4 justify-center">
+                    {juryVote.participants.map(p => (
+                      <div key={p.id} className="flex flex-col items-center">
+                        <span className="font-bold text-purple-700">{p.nickname}</span>
+                        <span className="text-lg font-mono">{Object.values(juryVote.votes || {}).filter(v => v === p.id).length}표</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {juryVote.ended && (
+                  <div className="mt-4 text-lg font-mono font-bold text-green-700">투표가 종료되었습니다.</div>
+                )}
+              </>
             )}
           </div>
         </div>
