@@ -29,9 +29,9 @@ const juryVoteStateMap = new Map(); // roomId -> { votes: {userId: 'A'|'B'}, tim
 
 // --- game-ended 이후 배심원 투표 시작 함수 ---
 async function startJuryVote(roomId, winnerUserId, loserUserId) {
-  // 참가자 2명일 때만
+  // 참가자 1명 이상일 때만
   const chatRoom = await ChatRoom.findById(roomId).populate('participants').populate('jury');
-  if (!chatRoom || chatRoom.participants.length !== 2) return;
+  if (!chatRoom || chatRoom.participants.length < 1) return;
   // jury가 0명이어도 emit
   juryVoteStateMap.set(roomId, { votes: {}, timeLeft: 10 });
   io.to(roomId).emit('start-jury-vote', {
