@@ -121,7 +121,8 @@ export default function ChatRoom({ chatRoom, onBack }) {
       newSocket.emit('join-room', {
         roomId: chatRoom._id,
         userId: user.id,
-        nickname: user.nickname
+        nickname: user.nickname,
+        role: 'participant' // 반드시 명시
       });
     });
 
