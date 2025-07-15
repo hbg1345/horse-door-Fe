@@ -333,7 +333,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
     if (socket && chatRoom && user) {
       socket.emit('leave-room', { roomId: chatRoom._id, userId: user.id, nickname: user.nickname });
     }
-    navigate('/dashboard');
+    if (onBack) onBack(); // navigate('/dashboard') 대신 onBack() 호출
   };
 
   return (
