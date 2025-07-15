@@ -147,7 +147,8 @@ router.get('/chatrooms/:id', async (req, res) => {
   try {
     const chatRoom = await ChatRoom.findById(req.params.id)
       .populate('createdBy', 'nickname')
-      .populate('participants', 'nickname');
+      .populate('participants', 'nickname')
+      .populate('jury', 'nickname');
     
     if (!chatRoom) {
       return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
