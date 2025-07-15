@@ -46,4 +46,50 @@ export const evaluateMessage = async (message) => {
 export const evaluateMessageWithGemini = async (message) => {
   const response = await api.post('/api/evaluate-gemini', { message });
   return response.data.score;
+};
+
+// 대기자 역할 변경
+export const patchChatRoomRole = async (id, userId, role) => {
+  const response = await api.patch(`/api/chatrooms/${id}/role`, { userId, role });
+  return response.data;
+};
+
+// 대기자(waiters)로 추가
+export const joinAsWaiter = async (id) => {
+  const response = await api.post(`/api/chatrooms/${id}/wait`);
+  return response.data;
+};
+
+// 대기룸 나가기
+export const leaveWaitingRoom = async (id) => {
+  const response = await api.post(`/api/chatrooms/${id}/leave-waitingroom`);
+  return response.data;
+};
+
+// 대기룸 입장 시 배심원(jury)으로 추가
+export const joinAsJury = async (id) => {
+  const response = await api.post(`/api/chatrooms/${id}/join-jury`);
+  return response.data;
+};
+
+// 배심원 → 참가자
+export const juryToParticipant = async (id, userId) => {
+  const response = await api.patch(`/api/chatrooms/${id}/jury-to-participant`, { userId });
+  return response.data;
+};
+// 참가자 → 배심원
+export const participantToJury = async (id, userId) => {
+  const response = await api.patch(`/api/chatrooms/${id}/participant-to-jury`, { userId });
+  return response.data;
+};
+// 배심원 나가기
+export const juryLeave = async (id) => {
+  const response = await api.post(`/api/chatrooms/${id}/jury-leave`);
+  return response.data;
+};
+
+// 방장이 배심원 강제 퇴장
+export const juryKick = async (id, userId) => {
+  const response = await api.delete(`/api/chatrooms/${id}/jury/${userId}`);
+  return response.data;
 }; 

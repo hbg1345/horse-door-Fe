@@ -3,6 +3,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { getChatRooms, createChatRoom, getChatRoom, deleteChatRoom } from '../lib/chatroomApi';
 import CreateChatRoomModal from '../components/CreateChatRoomModal';
 import ChatRoom from '../components/ChatRoom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { io } from 'socket.io-client';
+
+// 대기룸에서 사용하는 예쁜 로딩 오버레이 컴포넌트 복사
+function LoadingOverlay() {
+  return (
+    <div className="absolute inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center z-20 rounded-xl">
+      <div className="w-12 h-12 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <div className="text-green-300 font-mono text-lg">로딩 중...</div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -14,10 +26,44 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // 채팅방 목록 로드
   useEffect(() => {
     loadChatRooms();
+    const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
+      withCredentials: true
+    });
+    socket.on('chatroom-list-update', () => {
+      loadChatRooms();
+    });
+    return () => {
+      socket.disconnect();
+    };
   }, []);
+
+  // 대기룸에서 채팅 시작 시 바로 채팅방 입장
+  useEffect(() => {
+    if (location.state?.enterRoomId) {
+      (async () => {
+        try {
+          const updatedChatRoom = await getChatRoom(location.state.enterRoomId);
+          setSelectedChatRoom(updatedChatRoom);
+          setIsInChat(true);
+        } catch (err) {
+          setError('채팅방 정보를 불러오는데 실패했습니다.');
+        }
+      })();
+    }
+    // eslint-disable-next-line
+  }, [location.state?.enterRoomId]);
+
+  useEffect(() => {
+    if (!isInChat) {
+      loadChatRooms();
+    }
+  }, [isInChat]);
 
   const loadChatRooms = async () => {
     try {
@@ -46,8 +92,7 @@ export default function Dashboard() {
     try {
       const newChatRoom = await createChatRoom(chatRoomData);
       setChatRooms([newChatRoom, ...chatRooms]);
-      setSelectedChatRoom(newChatRoom);
-      setIsModalOpen(false);
+      navigate(`/waiting-room/${newChatRoom._id}`);
     } catch (err) {
       console.error('채팅방 생성 실패:', err);
       setError('채팅방 생성에 실패했습니다.');
@@ -129,10 +174,11 @@ export default function Dashboard() {
         </div>
         
         {/* 채팅방 목록 */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto relative">
           {loading ? (
-            <div className="p-4 text-center">
-              <div className="text-green-400 font-mono">로딩 중...</div>
+            <div className="relative h-full min-h-[200px]">
+              <LoadingOverlay />
+              <div style={{ height: 200 }} />
             </div>
           ) : error ? (
             <div className="p-4 text-center">
@@ -265,10 +311,10 @@ export default function Dashboard() {
                 뒤로 가기
               </button>
               <button 
-                onClick={() => setIsInChat(true)}
+                onClick={() => navigate(`/waiting-room/${selectedChatRoom._id}`)}
                 className="bg-green-500 hover:bg-green-600 text-black py-3 px-6 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-green-400 hover:border-green-300"
               >
-                채팅 참여
+                대기룸 입장
               </button>
             </div>
           </div>

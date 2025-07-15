@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../contexts/AuthContext';
 import { evaluateMessage, evaluateMessageWithGemini } from '../lib/chatroomApi';
+import { useNavigate } from 'react-router-dom';
 
 // 관전 전용 채팅 컴포넌트
 function SpectatorChatRoom({ chatRoom, user, userRole, socket, onClose }) {
@@ -94,6 +95,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const [showSpectatorChat, setShowSpectatorChat] = useState(true);
+  const navigate = useNavigate(); // 추가
 
   // 스크롤을 맨 아래로
   const scrollToBottom = () => {
@@ -326,6 +328,20 @@ export default function ChatRoom({ chatRoom, onBack }) {
     };
   }, [inputDisabled]);
 
+  // 나가기 버튼 핸들러
+  const handleLeaveRoom = () => {
+    // 참가자인 경우 확인 모달
+    if (userRole === 'participant') {
+      if (!window.confirm('정말로 채팅방에서 나가시겠습니까?')) {
+        return;
+      }
+    }
+    if (socket && chatRoom && user) {
+      socket.emit('leave-room', { roomId: chatRoom._id, userId: user.id, nickname: user.nickname });
+    }
+    if (onBack) onBack();
+  };
+
   return (
     <div className="w-full h-screen bg-black flex flex-row">
       {/* 메인 채팅창 */}
@@ -348,10 +364,10 @@ export default function ChatRoom({ chatRoom, onBack }) {
               </button>
             )}
             <button
-              onClick={onBack}
+              onClick={handleLeaveRoom}
               className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-gray-500 hover:border-gray-400"
             >
-              뒤로 가기
+              나가기
             </button>
           </div>
         </div>

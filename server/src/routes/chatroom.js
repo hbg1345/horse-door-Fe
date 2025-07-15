@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const ChatRoom = require('../models/ChatRoom');
 const axios = require('axios');
+const { broadcastWaitingRoomUpdate, broadcastChatRoomListUpdate } = require('../socketUtils');
 
 const router = Router();
 
@@ -148,7 +149,8 @@ router.get('/chatrooms/:id', async (req, res) => {
     const chatRoom = await ChatRoom.findById(req.params.id)
       .populate('createdBy', 'nickname')
       .populate('participants', 'nickname')
-      .populate('jury', 'nickname');
+      .populate('jury', 'nickname')
+      .populate('waiters', 'nickname');
     
     if (!chatRoom) {
       return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
@@ -196,6 +198,7 @@ router.post('/chatrooms', async (req, res) => {
     });
 
     await chatRoom.save();
+    broadcastChatRoomListUpdate();
     
     // 생성된 채팅방을 populate하여 반환
     const populatedChatRoom = await ChatRoom.findById(chatRoom._id)
@@ -305,10 +308,256 @@ router.delete('/chatrooms/:id', async (req, res) => {
     }
 
     await ChatRoom.findByIdAndDelete(req.params.id);
+    broadcastChatRoomListUpdate();
     res.json({ message: '채팅방이 삭제되었습니다' });
   } catch (error) {
     console.error('채팅방 삭제 에러:', error);
     res.status(500).json({ error: '채팅방 삭제 실패' });
+  }
+});
+
+// 대기자 역할 변경 (방장만)
+router.patch('/chatrooms/:id/role', async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: '로그인이 필요합니다' });
+    }
+    const { userId, role } = req.body; // role: 'participant' | 'jury'
+    if (!userId || !['participant', 'jury'].includes(role)) {
+      return res.status(400).json({ error: 'userId, role 필요' });
+    }
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) {
+      return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    }
+    // 방장만 가능
+    if (chatRoom.createdBy.toString() !== req.user.id) {
+      return res.status(403).json({ error: '방장만 역할 변경 가능' });
+    }
+    // 대기자에 있는지 확인
+    if (!chatRoom.waiters.map(id => id.toString()).includes(userId)) {
+      return res.status(400).json({ error: '해당 유저는 대기자가 아닙니다' });
+    }
+    // 대기자에서 제거
+    chatRoom.waiters = chatRoom.waiters.filter(id => id.toString() !== userId);
+    if (role === 'participant') {
+      if (chatRoom.participants.map(id => id.toString()).includes(userId)) {
+        return res.status(400).json({ error: '이미 참가자입니다' });
+      }
+      chatRoom.participants.push(userId);
+      chatRoom.currentParticipants += 1;
+    } else if (role === 'jury') {
+      if (!chatRoom.jury) chatRoom.jury = [];
+      if (chatRoom.jury.map(id => id.toString()).includes(userId)) {
+        return res.status(400).json({ error: '이미 배심원입니다' });
+      }
+      chatRoom.jury.push(userId);
+    }
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    const updatedChatRoom = await ChatRoom.findById(chatRoom._id)
+      .populate('createdBy', 'nickname')
+      .populate('participants', 'nickname')
+      .populate('jury', 'nickname')
+      .populate('waiters', 'nickname');
+    res.json(updatedChatRoom);
+  } catch (error) {
+    console.error('역할 변경 에러:', error);
+    res.status(500).json({ error: '역할 변경 실패' });
+  }
+});
+
+// 대기룸 입장 시 방장이 아니면 자동으로 배심원(jury)으로 추가
+router.post('/chatrooms/:id/join-jury', async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: '로그인이 필요합니다' });
+    }
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) {
+      return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    }
+    const userId = req.user.id;
+    // 방장은 배심원에 추가하지 않음
+    if (chatRoom.createdBy.toString() === userId) {
+      return res.status(200).json({ message: '방장은 배심원에 추가하지 않음' });
+    }
+    // 이미 참가자/배심원인지 확인
+    if (
+      chatRoom.participants.map(id => id.toString()).includes(userId) ||
+      (chatRoom.jury && chatRoom.jury.map(id => id.toString()).includes(userId))
+    ) {
+      return res.status(200).json({ message: '이미 참가자 또는 배심원' });
+    }
+    if (!chatRoom.jury.map(id => id.toString()).includes(userId)) {
+      chatRoom.jury.push(userId);
+      await chatRoom.save();
+      broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    }
+    const updatedChatRoom = await ChatRoom.findById(chatRoom._id)
+      .populate('createdBy', 'nickname')
+      .populate('participants', 'nickname')
+      .populate('jury', 'nickname');
+    res.json(updatedChatRoom);
+  } catch (error) {
+    console.error('배심원 추가 에러:', error);
+    res.status(500).json({ error: '배심원 추가 실패' });
+  }
+});
+
+// 대기룸 나가기 (waiters/participants/jury에서 모두 제거)
+router.post('/chatrooms/:id/leave-waitingroom', async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: '로그인이 필요합니다' });
+    }
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) {
+      return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    }
+    const userId = req.user.id;
+    // waiters에서 제거
+    chatRoom.waiters = chatRoom.waiters.filter(id => id.toString() !== userId);
+    // participants에서 제거
+    if (chatRoom.participants.map(id => id.toString()).includes(userId)) {
+      chatRoom.participants = chatRoom.participants.filter(id => id.toString() !== userId);
+      chatRoom.currentParticipants = Math.max(0, chatRoom.currentParticipants - 1);
+    }
+    // jury에서 제거
+    if (chatRoom.jury && chatRoom.jury.map(id => id.toString()).includes(userId)) {
+      chatRoom.jury = chatRoom.jury.filter(id => id.toString() !== userId);
+    }
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    // 모두 나가면 채팅방 삭제
+    if ((chatRoom.participants.length === 0) && (!chatRoom.jury || chatRoom.jury.length === 0)) {
+      await ChatRoom.findByIdAndDelete(chatRoom._id);
+      broadcastChatRoomListUpdate();
+      return res.json({ message: '채팅방이 삭제되었습니다' });
+    }
+    broadcastChatRoomListUpdate();
+    res.json({ message: '나가기 완료' });
+  } catch (error) {
+    console.error('대기룸 나가기 에러:', error);
+    res.status(500).json({ error: '대기룸 나가기 실패' });
+  }
+});
+
+// 배심원 → 참가자 승격 (방장만)
+router.patch('/chatrooms/:id/jury-to-participant', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: '로그인이 필요합니다' });
+    const { userId } = req.body;
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    if (chatRoom.createdBy.toString() !== req.user.id) return res.status(403).json({ error: '방장만 역할 변경 가능' });
+    // 배심원에 있는지 확인
+    if (!chatRoom.jury.map(id => id.toString()).includes(userId)) {
+      return res.status(400).json({ error: '해당 유저는 배심원이 아닙니다' });
+    }
+    // 배심원에서 제거, 참가자에 추가
+    chatRoom.jury = chatRoom.jury.filter(id => id.toString() !== userId);
+    if (!chatRoom.participants.map(id => id.toString()).includes(userId)) {
+      chatRoom.participants.push(userId);
+      chatRoom.currentParticipants += 1;
+    }
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    broadcastChatRoomListUpdate();
+    const updatedChatRoom = await ChatRoom.findById(chatRoom._id)
+      .populate('createdBy', 'nickname')
+      .populate('participants', 'nickname')
+      .populate('jury', 'nickname');
+    res.json(updatedChatRoom);
+  } catch (error) {
+    res.status(500).json({ error: '역할 변경 실패' });
+  }
+});
+
+// 참가자 → 배심원 (방장만)
+router.patch('/chatrooms/:id/participant-to-jury', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: '로그인이 필요합니다' });
+    const { userId } = req.body;
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    if (chatRoom.createdBy.toString() !== req.user.id) return res.status(403).json({ error: '방장만 역할 변경 가능' });
+    // 참가자에 있는지 확인
+    if (!chatRoom.participants.map(id => id.toString()).includes(userId)) {
+      return res.status(400).json({ error: '해당 유저는 참가자가 아닙니다' });
+    }
+    // 본인은 내릴 수 없음
+    if (req.user.id === userId) {
+      return res.status(400).json({ error: '본인은 내릴 수 없습니다' });
+    }
+    // 참가자에서 제거, 배심원에 추가
+    chatRoom.participants = chatRoom.participants.filter(id => id.toString() !== userId);
+    chatRoom.currentParticipants = Math.max(0, chatRoom.currentParticipants - 1);
+    if (!chatRoom.jury.map(id => id.toString()).includes(userId)) {
+      chatRoom.jury.push(userId);
+    }
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    broadcastChatRoomListUpdate();
+    const updatedChatRoom = await ChatRoom.findById(chatRoom._id)
+      .populate('createdBy', 'nickname')
+      .populate('participants', 'nickname')
+      .populate('jury', 'nickname');
+    res.json(updatedChatRoom);
+  } catch (error) {
+    res.status(500).json({ error: '역할 변경 실패' });
+  }
+});
+
+// 배심원 나가기 (본인)
+router.post('/chatrooms/:id/jury-leave', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: '로그인이 필요합니다' });
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    const userId = req.user.id;
+    // 배심원에서 제거
+    chatRoom.jury = chatRoom.jury.filter(id => id.toString() !== userId);
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    // 모두 나가면 방 삭제
+    if ((chatRoom.participants.length === 0) && (!chatRoom.jury || chatRoom.jury.length === 0)) {
+      await ChatRoom.findByIdAndDelete(chatRoom._id);
+      broadcastChatRoomListUpdate();
+      return res.json({ message: '채팅방이 삭제되었습니다' });
+    }
+    broadcastChatRoomListUpdate();
+    res.json({ message: '나가기 완료' });
+  } catch (error) {
+    res.status(500).json({ error: '배심원 나가기 실패' });
+  }
+});
+
+// 방장이 특정 배심원을 강제 퇴장
+router.delete('/chatrooms/:id/jury/:userId', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: '로그인이 필요합니다' });
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    if (chatRoom.createdBy.toString() !== req.user.id) return res.status(403).json({ error: '방장만 강제 퇴장 가능' });
+    const targetId = req.params.userId;
+    // 배심원에 있는지 확인
+    if (!chatRoom.jury.map(id => id.toString()).includes(targetId)) {
+      return res.status(400).json({ error: '해당 유저는 배심원이 아닙니다' });
+    }
+    chatRoom.jury = chatRoom.jury.filter(id => id.toString() !== targetId);
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    // 모두 나가면 방 삭제
+    if ((chatRoom.participants.length === 0) && (!chatRoom.jury || chatRoom.jury.length === 0)) {
+      await ChatRoom.findByIdAndDelete(chatRoom._id);
+      broadcastChatRoomListUpdate();
+      return res.json({ message: '채팅방이 삭제되었습니다' });
+    }
+    broadcastChatRoomListUpdate();
+    res.json({ message: '강제 퇴장 완료' });
+  } catch (error) {
+    res.status(500).json({ error: '배심원 강제 퇴장 실패' });
   }
 });
 
