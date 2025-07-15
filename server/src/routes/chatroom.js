@@ -687,7 +687,8 @@ router.post('/chatrooms/:id/start-chat', async (req, res) => {
     const ownerId = chatRoom.createdBy.toString();
     const participantIds = chatRoom.participants.map(id => id.toString()).filter(id => id !== ownerId);
     const readyIds = (chatRoom.readyParticipants || []).map(id => id.toString());
-    const allReady = participantIds.length > 0 && participantIds.every(id => readyIds.includes(id));
+    // 수정: 참가자가 없어도 시작 가능하도록 조건 변경
+    const allReady = participantIds.every(id => readyIds.includes(id));
     if (!allReady) {
       return res.status(400).json({ error: '모든 참가자가 준비되어야 합니다' });
     }
