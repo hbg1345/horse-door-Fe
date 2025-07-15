@@ -708,4 +708,34 @@ router.post('/chatrooms/:id/start-chat', async (req, res) => {
   }
 });
 
+// 방 정보 전체 수정 (방장만)
+router.patch('/chatrooms/:id', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: '로그인이 필요합니다' });
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    if (chatRoom.createdBy.toString() !== req.user.id) {
+      return res.status(403).json({ error: '방장만 수정 가능' });
+    }
+    const { title, description, maxParticipants, isRanking, isItemBattle, allowJury, allowLawyer } = req.body;
+    if (title) chatRoom.title = title;
+    if (description !== undefined) chatRoom.description = description;
+    if (maxParticipants) chatRoom.maxParticipants = maxParticipants;
+    if (isRanking !== undefined) chatRoom.isRanking = isRanking;
+    if (isItemBattle !== undefined) chatRoom.isItemBattle = isItemBattle;
+    if (allowJury !== undefined) chatRoom.allowJury = allowJury;
+    if (allowLawyer !== undefined) chatRoom.allowLawyer = allowLawyer;
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    const updatedChatRoom = await ChatRoom.findById(chatRoom._id)
+      .populate('createdBy', 'nickname')
+      .populate('participants', 'nickname')
+      .populate('jury', 'nickname')
+      .populate('waiters', 'nickname');
+    res.json(updatedChatRoom);
+  } catch (error) {
+    res.status(500).json({ error: '방 정보 수정 실패' });
+  }
+});
+
 module.exports = router; 

@@ -1,9 +1,12 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
 import { getChatRoom, juryToParticipant, participantToJury, juryLeave, juryKick, joinAsJury, leaveWaitingRoom, getChatRoomSummary, saveChatRoomSummary, requestAiSummary } from '../lib/chatroomApi';
+import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { io } from 'socket.io-client';
 import axios from 'axios';
+import html2pdf from "html2pdf.js";
+import EditRoomModal from '../components/EditRoomModal';
 
 function LoadingOverlay() {
   return (
@@ -14,52 +17,67 @@ function LoadingOverlay() {
   );
 }
 
-// 플러스(+) 아이콘 컴포넌트
-function PlusIcon({ className }) {
+function DiamondIcon({ className }) {
   return (
-    <svg className={className} width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="10" cy="10" r="9" fill="#22c55e" className="group-hover:fill-green-600 transition"/>
-      <path d="M10 6V14" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-      <path d="M6 10H14" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+    <svg className={className} width="22" height="22" viewBox="0 0 22 22" fill="none">
+      <polygon points="11,3 20,11 11,19 2,11" fill="#6366f1"/>
     </svg>
   );
 }
-// X(엑스) 아이콘 컴포넌트
-function XIcon({ className }) {
+
+function WaitingRoomChat({ roomId, user, socketRef }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (!socketRef.current) return;
+    const handler = (msg) => {
+      if (msg.roomId === roomId) setMessages(prev => [...prev, msg]);
+    };
+    socketRef.current.on('waiting-room-chat', handler);
+    return () => {
+      socketRef.current.off('waiting-room-chat', handler);
+    };
+  }, [roomId, socketRef]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSend = (e) => {
+    e.preventDefault();
+    if (!input.trim() || !socketRef.current) return;
+    const msg = {
+      roomId,
+      userId: user.id,
+      nickname: user.nickname,
+      message: input.trim(),
+      timestamp: Date.now(),
+    };
+    socketRef.current.emit('waiting-room-chat', msg);
+    setMessages(prev => [...prev, msg]);
+    setInput('');
+  };
+
   return (
-    <svg className={className} width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="10" cy="10" r="9" fill="#ef4444" className="group-hover:fill-red-700 transition"/>
-      <path d="M7 7L13 13" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-      <path d="M13 7L7 13" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-    </svg>
-  );
-}
-// 아래 화살표(Down) 아이콘 컴포넌트
-function DownArrowIcon({ className }) {
-  return (
-    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="10" cy="10" r="9" fill="#a3e635" className="group-hover:fill-green-500 transition"/>
-      <path d="M6 9l4 4 4-4" stroke="#222" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-// 위 화살표(Up) 아이콘 컴포넌트
-function UpArrowIcon({ className }) {
-  return (
-    <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="10" cy="10" r="9" fill="#a3e635" className="group-hover:fill-green-500 transition"/>
-      <path d="M6 11l4-4 4 4" stroke="#222" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-// 보라색 X(엑스) 아이콘 컴포넌트 (배심원 강퇴용)
-function PurpleXIcon({ className }) {
-  return (
-    <svg className={className} width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="10" cy="10" r="9" fill="#a78bfa" className="group-hover:fill-purple-600 transition"/>
-      <path d="M7 7L13 13" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-      <path d="M13 7L7 13" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-    </svg>
+    <div style={{width: '100%', height: '100%', background:'#181e2a',borderRadius:12,boxShadow:'0 2px 12px #0008',border:'2px solid #4f46e5',display:'flex',flexDirection:'column'}}>
+      <div style={{padding:12,borderBottom:'1px solid #4f46e5',color:'#a5b4fc',fontWeight:'bold',fontFamily:'monospace',fontSize:18}}>대기룸 채팅</div>
+      <div style={{flex:1,overflowY:'auto',padding:12}}>
+        {messages.map((msg,idx)=>(
+          <div key={idx} style={{marginBottom:8}}>
+            <span style={{color:'#60a5fa',fontWeight:'bold'}}>{msg.nickname}</span>
+            <span style={{color:'#fff',marginLeft:8}}>{msg.message}</span>
+            <div style={{fontSize:12,color:'#64748b',textAlign:'right'}}>{new Date(msg.timestamp).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+      <form onSubmit={handleSend} style={{display:'flex',borderTop:'1px solid #4f46e5',padding:8}}>
+        <input value={input} onChange={e=>setInput(e.target.value)} placeholder="메시지 입력..." style={{flex:1,background:'#232946',color:'#fff',border:'none',borderRadius:6,padding:'8px 12px',fontSize:16}} />
+        <button type="submit" disabled={!input.trim()} style={{marginLeft:8,background:'#6366f1',color:'#fff',border:'none',borderRadius:6,padding:'8px 16px',fontWeight:'bold',fontFamily:'monospace',fontSize:16,cursor:input.trim()? 'pointer':'not-allowed',opacity:input.trim()?1:0.5}}>전송</button>
+      </form>
+    </div>
   );
 }
 
@@ -72,24 +90,25 @@ export default function WaitingRoom() {
   const [error, setError] = useState('');
   const [roleChangeLoading, setRoleChangeLoading] = useState('');
   const [showJuryDropdown, setShowJuryDropdown] = useState(false);
-  const [showJuryDropdownB, setShowJuryDropdownB] = useState(false); // 당사자B용
+  const [showJuryDropdownB, setShowJuryDropdownB] = useState(false);
   const [jurySearch, setJurySearch] = useState('');
   const socketRef = useRef(null);
   const [roomDeleted, setRoomDeleted] = useState(false);
-  // 상황설명 상태
   const [summaryA, setSummaryA] = useState('');
   const [summaryB, setSummaryB] = useState('');
   const [aiSummary, setAiSummary] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiRequested, setAiRequested] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  // 내 역할 구분
   const myId = user?.id;
   const isParticipantA = room?.participants?.[0]?._id === myId || room?.participants?.[0]?.id === myId;
   const isParticipantB = room?.participants?.[1]?._id === myId || room?.participants?.[1]?.id === myId;
   const isJury = room?.jury?.some(u => u._id === myId || u.id === myId);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showPledgeModal, setShowPledgeModal] = useState(false);
+  const [pledgeText, setPledgeText] = useState('');
+  const [downloading, setDownloading] = useState(false);
 
-  // 상황설명 fetch
   async function fetchSummary() {
     setSummaryLoading(true);
     try {
@@ -108,7 +127,6 @@ export default function WaitingRoom() {
     fetchSummary();
     // eslint-disable-next-line
   }, [roomId]);
-  // 소켓 waiting-room-update 시에도 fetchSummary
   useEffect(() => {
     if (!socketRef.current) return;
     socketRef.current.on('waiting-room-update', fetchSummary);
@@ -117,7 +135,6 @@ export default function WaitingRoom() {
     };
   }, [socketRef.current]);
 
-  // 상황설명 입력 저장
   async function handleSaveSummary(role, summary) {
     setSummaryLoading(true);
     try {
@@ -126,8 +143,6 @@ export default function WaitingRoom() {
     } catch {}
     setSummaryLoading(false);
   }
-
-  // useState, useEffect, animateBoxes 등 애니메이션 관련 코드 제거
 
   async function fetchRoom() {
     try {
@@ -141,7 +156,6 @@ export default function WaitingRoom() {
     }
   }
 
-  // 대기룸 입장 시 방장이 아니면 자동으로 배심원(jury)으로 추가
   useEffect(() => {
     async function joinAndFetch() {
       try {
@@ -155,7 +169,6 @@ export default function WaitingRoom() {
     // eslint-disable-next-line
   }, [roomId]);
 
-  // 소켓 연결 및 start-chat, waiting-room-update 이벤트 처리
   useEffect(() => {
     if (!user) return;
     const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
@@ -179,10 +192,9 @@ export default function WaitingRoom() {
     });
     socket.on('waiting-room-update', () => {
       fetchRoom();
+      fetchSummary();
     });
-    // 방 삭제 감지
     socket.on('chatroom-list-update', async () => {
-      // 방이 사라졌는지 확인
       const data = await getChatRoom(roomId).catch(() => null);
       if (!data) {
         setRoomDeleted(true);
@@ -200,8 +212,6 @@ export default function WaitingRoom() {
   useEffect(() => {
     if (!socketRef.current) return;
     const handleStartChat = () => {
-      console.log('[start-chat] 이벤트 수신!');
-      console.log('[start-chat] navigate 호출:', `/dashboard`, { state: { enterRoomId: roomId } });
       navigate(`/dashboard`, { state: { enterRoomId: roomId } });
     };
     socketRef.current.on('start-chat', handleStartChat);
@@ -256,12 +266,11 @@ export default function WaitingRoom() {
     }
   };
 
-  // AI 요약 폴링 함수 (무한 반복)
   async function handleAiSummaryPolling() {
     setAiLoading(true);
     setAiRequested(true);
     let tries = 0;
-    const maxTries = 9999; // 사실상 무한 반복
+    const maxTries = 9999;
     async function poll() {
       try {
         const res = await requestAiSummary(roomId);
@@ -270,17 +279,14 @@ export default function WaitingRoom() {
           setAiRequested(false);
           setAiLoading(false);
         } else {
-          // 예외적 상황: aiSummary가 없으면 재시도
           if (tries < maxTries) {
             tries++;
             setTimeout(poll, 1000);
           } else {
-            // 시간 초과로 멈추지 않고 계속 폴링
             setTimeout(poll, 1000);
           }
         }
       } catch (e) {
-        // 상대방 입력 대기 에러면 계속 폴링 (aiRequested/aiLoading을 false로 바꾸지 않음)
         if (e?.response?.data?.error?.includes('두 당사자의 상황설명이 모두 필요합니다')) {
           if (tries < maxTries) {
             tries++;
@@ -472,6 +478,52 @@ export default function WaitingRoom() {
           </div>
         </div>
       </div>
+      {/* 대기룸 채팅 정보 박스 (채팅창 바로 위, 예쁘게 개선) */}
+      {room && (
+        <div style={{
+          position: 'fixed',
+          bottom: 610,
+          right: 80,
+          zIndex: 2000,
+          width: 560,
+          minHeight: 120,
+          background: 'linear-gradient(90deg, #232946 70%, #6366f1 100%)',
+          border: 'none',
+          borderRadius: '18px',
+          padding: '24px 36px',
+          color: '#fff',
+          fontFamily: 'monospace',
+          boxShadow: '0 4px 24px #0007',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          alignItems: 'flex-start',
+          borderTop: '4px solid #a5b4fc',
+        }}>
+          <div style={{display:'flex',width:'100%',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+            <div style={{fontSize:'1.35rem',fontWeight:'bold',color:'#a5b4fc',letterSpacing:'-1px',display:'flex',alignItems:'center',gap:10}}>
+              <DiamondIcon />
+              방 설정
+            </div>
+            {isOwner && <button onClick={()=>setShowEditModal(true)} style={{marginLeft:8,background:'#6366f1',color:'#fff',border:'none',borderRadius:8,padding:'7px 18px',fontWeight:'bold',fontSize:15,cursor:'pointer',boxShadow:'0 2px 8px #6366f155'}}>수정</button>}
+          </div>
+          {room.description && <div style={{color:'#e0e7ef',fontSize:'1.08rem',marginBottom:2,maxWidth:420,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}><span style={{color:'#a5b4fc',fontWeight:'bold'}}>방 설명:</span> {room.description}</div>}
+          <div style={{display:'flex',gap:18,flexWrap:'wrap',marginTop:2,fontSize:'1.01rem',alignItems:'center'}}>
+            <span style={{background:'#181e2a',color:'#a5b4fc',borderRadius:6,padding:'4px 14px',fontWeight:'bold',fontSize:15,boxShadow:'0 1px 4px #0002'}}>최대 인원: {room.maxParticipants}</span>
+            <span style={{background: room.isRanking ? '#4ade80' : '#64748b',color:'#232946',borderRadius:6,padding:'4px 14px',fontWeight:'bold',fontSize:15}}>랭킹전: {room.isRanking ? 'ON' : 'OFF'}</span>
+            <span style={{background: room.isItemBattle ? '#facc15' : '#64748b',color:'#232946',borderRadius:6,padding:'4px 14px',fontWeight:'bold',fontSize:15}}>아이템전: {room.isItemBattle ? 'ON' : 'OFF'}</span>
+            <span style={{background: room.allowJury ? '#38bdf8' : '#64748b',color:'#232946',borderRadius:6,padding:'4px 14px',fontWeight:'bold',fontSize:15}}>배심원: {room.allowJury ? '허용' : '비허용'}</span>
+            <span style={{background: room.allowLawyer ? '#f472b6' : '#64748b',color:'#232946',borderRadius:6,padding:'4px 14px',fontWeight:'bold',fontSize:15}}>변호사: {room.allowLawyer ? '허용' : '비허용'}</span>
+          </div>
+        </div>
+      )}
+      {showEditModal && <EditRoomModal room={room} onClose={()=>setShowEditModal(false)} onSave={async()=>{setShowEditModal(false); await fetchRoom(); await fetchSummary();}} />}
+      {/* 대기룸 채팅창 (화면 전체 우측 하단 고정) */}
+      {user && roomId && (
+        <div style={{position:'fixed',bottom:200,right:80,zIndex:1000,width:560,height:320}}>
+          <WaitingRoomChat roomId={roomId} user={user} socketRef={socketRef} />
+        </div>
+      )}
       {/* 상황설명 박스 (화면 중앙에 고정, 내부 여유 공간 확보) */}
       <div style={{position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 50, width: '100%', maxWidth: '32rem', minWidth: '18rem', padding: 24}} className="bg-gray-800/80 rounded-2xl shadow-2xl border-2 border-gray-600 min-h-[340px] flex flex-col items-center justify-center">
         <div className="w-full mb-2 flex-shrink-0 flex items-center justify-center" style={{minHeight: 40}}>
@@ -587,49 +639,53 @@ export default function WaitingRoom() {
         </button>
         {/* 준비/시작 버튼 UX 개선 */}
         {isOwner ? (
-          <button
-            className="bg-green-500 hover:bg-green-600 text-black py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-green-400 hover:border-green-300 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
-            disabled={!allReady}
-            onClick={async () => {
-              try {
-                await fetch(`/api/chatrooms/${roomId}/start-chat`, { method: 'POST', credentials: 'include' });
-              } catch (e) {
-                alert('채팅 시작 실패: ' + (e?.response?.data?.error || e.message));
-              }
-            }}
-          >
-            채팅 시작
-          </button>
+          <>
+            <button
+              className="bg-green-500 hover:bg-green-600 text-black py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-green-400 hover:border-green-300 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
+              disabled={!allReady}
+              onClick={async () => {
+                try {
+                  await fetch(`/api/chatrooms/${roomId}/start-chat`, { method: 'POST', credentials: 'include' });
+                } catch (e) {
+                  alert('채팅 시작 실패: ' + (e?.response?.data?.error || e.message));
+                }
+              }}
+            >
+              채팅 시작
+            </button>
+          </>
         ) : (isParticipantA || isParticipantB) ? (
-          room.readyParticipants && room.readyParticipants.map(String).includes(String(myId)) ? (
-            <button
-              className="bg-yellow-400 hover:bg-yellow-500 text-black py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-yellow-300 hover:border-yellow-200 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
-              onClick={async () => {
-                try {
-                  await fetch(`/api/chatrooms/${roomId}/unready`, { method: 'POST', credentials: 'include' });
-                  await fetchRoom();
-                } catch (e) {
-                  alert('준비 해제 실패: ' + (e?.response?.data?.error || e.message));
-                }
-              }}
-            >
-              준비됨 (해제)
-            </button>
-          ) : (
-            <button
-              className="bg-blue-500 hover:bg-blue-600 text-white py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-blue-400 hover:border-blue-300 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
-              onClick={async () => {
-                try {
-                  await fetch(`/api/chatrooms/${roomId}/ready`, { method: 'POST', credentials: 'include' });
-                  await fetchRoom();
-                } catch (e) {
-                  alert('준비 실패: ' + (e?.response?.data?.error || e.message));
-                }
-              }}
-            >
-              준비
-            </button>
-          )
+          <>
+            {room.readyParticipants && room.readyParticipants.map(String).includes(String(myId)) ? (
+              <button
+                className="bg-yellow-400 hover:bg-yellow-500 text-black py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-yellow-300 hover:border-yellow-200 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
+                onClick={async () => {
+                  try {
+                    await fetch(`/api/chatrooms/${roomId}/unready`, { method: 'POST', credentials: 'include' });
+                    await fetchRoom();
+                  } catch (e) {
+                    alert('준비 해제 실패: ' + (e?.response?.data?.error || e.message));
+                  }
+                }}
+              >
+                준비됨 (해제)
+              </button>
+            ) : (
+              <button
+                className="bg-blue-500 hover:bg-blue-600 text-white py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-blue-400 hover:border-blue-300 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
+                onClick={async () => {
+                  try {
+                    await fetch(`/api/chatrooms/${roomId}/ready`, { method: 'POST', credentials: 'include' });
+                    await fetchRoom();
+                  } catch (e) {
+                    alert('준비 실패: ' + (e?.response?.data?.error || e.message));
+                  }
+                }}
+              >
+                준비
+              </button>
+            )}
+          </>
         ) : null}
       </div>
       {/* 안내 메시지 */}

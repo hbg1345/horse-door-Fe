@@ -263,6 +263,13 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('jury-vote-update', { votes: state.votes, timeLeft: state.timeLeft });
   });
 
+  // 대기룸 채팅 메시지 브로드캐스트
+  socket.on('waiting-room-chat', (msg) => {
+    if (msg && msg.roomId) {
+      io.to(msg.roomId).emit('waiting-room-chat', msg);
+    }
+  });
+
   // leave-room 이벤트 처리
   socket.on('leave-room', async ({ roomId, userId, nickname }) => {
     // 참가자만 퇴장 메시지
