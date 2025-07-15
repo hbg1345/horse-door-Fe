@@ -73,6 +73,11 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 채팅 시작(강제 이동)
+  socket.on('start-chat', ({ roomId }) => {
+    io.to(roomId).emit('start-chat');
+  });
+
   // 연결 해제
   socket.on('disconnect', () => {
     const userInfo = connectedUsers.get(socket.id);

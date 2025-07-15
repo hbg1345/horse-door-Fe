@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getChatRooms, createChatRoom, getChatRoom, deleteChatRoom } from '../lib/chatroomApi';
 import CreateChatRoomModal from '../components/CreateChatRoomModal';
 import ChatRoom from '../components/ChatRoom';
+import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -14,6 +15,8 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  const navigate = useNavigate();
+
   // 채팅방 목록 로드
   useEffect(() => {
     loadChatRooms();
@@ -265,10 +268,10 @@ export default function Dashboard() {
                 뒤로 가기
               </button>
               <button 
-                onClick={() => setIsInChat(true)}
+                onClick={() => navigate(`/waiting-room/${selectedChatRoom._id}`)}
                 className="bg-green-500 hover:bg-green-600 text-black py-3 px-6 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-green-400 hover:border-green-300"
               >
-                채팅 참여
+                대기룸 입장
               </button>
             </div>
           </div>

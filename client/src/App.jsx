@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Protected from './components/Protected';
 import KakaoRedirect from './pages/KakaoRedirect';
 import KakaoCallback from './pages/KakaoCallback';
+import WaitingRoom from './pages/WaitingRoom';
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
             } />
             <Route path="/auth/kakao" element={<KakaoRedirect />} />
             <Route path="/auth/kakao/callback" element={<KakaoCallback />} />
+            <Route path="/waiting-room/:roomId" element={<Protected><WaitingRoom /></Protected>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

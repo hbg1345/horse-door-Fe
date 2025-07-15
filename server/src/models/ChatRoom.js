@@ -47,6 +47,10 @@ const chatRoomSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'User'
   }],
+  waiters: [{
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   spectatorMessages: [
     {
       userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
