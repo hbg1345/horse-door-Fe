@@ -18,21 +18,7 @@ function makePrompt(message) {
 }
 
 // Perplexity API 평가 함수
-async function evaluateWithPerplexity(message) {
-  // 원하는 JSON 구조를 schema로 정의
-  const jsonSchema = {
-    type: "object",
-    properties: {
-      논리성: { type: "integer" },
-      상호존중: { type: "integer" },
-      창의성: { type: "integer" },
-      카운터: { type: "integer" }
-    },
-    required: ["논리성", "상호존중", "창의성", "카운터"]
-  };
-
-  const prompt = makePrompt(message);
-
+async function evaluateWithPerplexity(message, jsonSchema) {
   try {
     const res = await axios.post(
       'https://api.perplexity.ai/chat/completions',
@@ -40,7 +26,7 @@ async function evaluateWithPerplexity(message) {
         model: "sonar",
         messages: [
           { role: "system", content: "모든 답변은 반드시 JSON 형식으로만 출력하세요." },
-          { role: "user", content: prompt }
+          { role: "user", content: message }
         ],
         temperature: 0.2,
         response_format: {
@@ -57,8 +43,6 @@ async function evaluateWithPerplexity(message) {
         }
       }
     );
-
-    // Perplexity 공식 문서 기준: content는 항상 JSON 문자열임
     const content = res.data.choices[0].message.content.trim();
     return JSON.parse(content);
   } catch (e) {
@@ -105,7 +89,19 @@ router.post('/evaluate', async (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: '메시지가 필요합니다.' });
   try {
-    const score = await evaluateWithPerplexity(message);
+    // 점수 평가용 schema
+    const scoreSchema = {
+      type: "object",
+      properties: {
+        논리성: { type: "integer" },
+        상호존중: { type: "integer" },
+        창의성: { type: "integer" },
+        카운터: { type: "integer" }
+      },
+      required: ["논리성", "상호존중", "창의성", "카운터"]
+    };
+    const prompt = makePrompt(message);
+    const score = await evaluateWithPerplexity(prompt, scoreSchema);
     if (!score) return res.status(500).json({ error: 'AI 평가 실패' });
     res.json({ score });
   } catch (err) {
@@ -599,7 +595,18 @@ router.post('/chatrooms/:id/ai-summary', async (req, res) => {
     const { summaryA, summaryB } = chatRoom;
     if (!summaryA || !summaryB) return res.status(400).json({ error: '두 당사자의 상황설명이 모두 필요합니다.' });
     const prompt = `아래는 두 참가자의 자기소개/입장/상황입니다.\n- 참가자A: ${summaryA}\n- 참가자B: ${summaryB}\n이 상황을 객관적으로 요약해 주세요. 반드시 반드시 반드시 반드시 아래 예시처럼 JSON만 출력하세요.\n\n예시:\n{\n  "쟁점": "...",\n  "공통점": "...",\n  "차이점": "...",\n  "논점": "...",\n  "대립되는 부분": "..."\n}`;
-    const aiResult = await evaluateWithPerplexity(prompt);
+    const summarySchema = {
+      type: "object",
+      properties: {
+        쟁점: { type: "string" },
+        공통점: { type: "string" },
+        차이점: { type: "string" },
+        논점: { type: "string" },
+        "대립되는 부분": { type: "string" }
+      },
+      required: ["쟁점", "공통점", "차이점", "논점", "대립되는 부분"]
+    };
+    const aiResult = await evaluateWithPerplexity(prompt, summarySchema);
     chatRoom.aiSummary = typeof aiResult === 'string' ? aiResult : JSON.stringify(aiResult, null, 2);
     await chatRoom.save();
     broadcastWaitingRoomUpdate(chatRoom._id);
