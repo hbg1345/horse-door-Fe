@@ -598,7 +598,7 @@ router.post('/chatrooms/:id/ai-summary', async (req, res) => {
     if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
     const { summaryA, summaryB } = chatRoom;
     if (!summaryA || !summaryB) return res.status(400).json({ error: '두 당사자의 상황설명이 모두 필요합니다.' });
-    const prompt = `당사자A: ${summaryA}\n당사자B: ${summaryB}`;
+    const prompt = `아래는 두 참가자의 자기소개/입장/상황입니다.\n- 참가자A: ${summaryA}\n- 참가자B: ${summaryB}\n이 상황을 객관적으로 요약해 주세요. (쟁점, 공통점, 차이점, 논점, 대립되는 부분 등을 중심으로 간결하게)`;
     const aiResult = await evaluateWithPerplexity(prompt);
     chatRoom.aiSummary = typeof aiResult === 'string' ? aiResult : JSON.stringify(aiResult, null, 2);
     await chatRoom.save();
@@ -606,6 +606,74 @@ router.post('/chatrooms/:id/ai-summary', async (req, res) => {
     res.json({ aiSummary: chatRoom.aiSummary });
   } catch (e) {
     res.status(500).json({ error: 'AI 요약 생성 실패' });
+  }
+});
+
+// 참가자 준비 (ready)
+router.post('/chatrooms/:id/ready', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: '로그인이 필요합니다' });
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    const userId = req.user.id;
+    if (!chatRoom.participants.map(id => id.toString()).includes(userId)) {
+      return res.status(400).json({ error: '참가자가 아닙니다' });
+    }
+    if (!chatRoom.readyParticipants) chatRoom.readyParticipants = [];
+    if (!chatRoom.readyParticipants.map(id => id.toString()).includes(userId)) {
+      chatRoom.readyParticipants.push(userId);
+      await chatRoom.save();
+      broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    }
+    res.json({ readyParticipants: chatRoom.readyParticipants });
+  } catch (error) {
+    res.status(500).json({ error: '준비 실패' });
+  }
+});
+
+// 참가자 준비 해제 (unready)
+router.post('/chatrooms/:id/unready', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: '로그인이 필요합니다' });
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    const userId = req.user.id;
+    if (!chatRoom.participants.map(id => id.toString()).includes(userId)) {
+      return res.status(400).json({ error: '참가자가 아닙니다' });
+    }
+    if (!chatRoom.readyParticipants) chatRoom.readyParticipants = [];
+    chatRoom.readyParticipants = chatRoom.readyParticipants.filter(id => id.toString() !== userId);
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    res.json({ readyParticipants: chatRoom.readyParticipants });
+  } catch (error) {
+    res.status(500).json({ error: '준비 해제 실패' });
+  }
+});
+
+// 채팅 시작 (방장만, 모든 참가자 준비 시)
+router.post('/chatrooms/:id/start-chat', async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: '로그인이 필요합니다' });
+    const chatRoom = await ChatRoom.findById(req.params.id);
+    if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
+    if (chatRoom.createdBy.toString() !== req.user.id) {
+      return res.status(403).json({ error: '방장만 채팅 시작 가능' });
+    }
+    const participantIds = chatRoom.participants.map(id => id.toString());
+    const readyIds = (chatRoom.readyParticipants || []).map(id => id.toString());
+    const allReady = participantIds.every(id => readyIds.includes(id));
+    if (!allReady) {
+      return res.status(400).json({ error: '모든 참가자가 준비되어야 합니다' });
+    }
+    // (여기서 채팅방 상태를 "진행중" 등으로 변경 가능)
+    // 준비 상태 초기화
+    chatRoom.readyParticipants = [];
+    await chatRoom.save();
+    broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    res.json({ message: '채팅이 시작되었습니다' });
+  } catch (error) {
+    res.status(500).json({ error: '채팅 시작 실패' });
   }
 });
 
