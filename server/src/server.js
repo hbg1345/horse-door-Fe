@@ -33,20 +33,16 @@ io.on('connection', (socket) => {
   });
 
   // 메시지 전송
-  socket.on('send-message', ({ roomId, message, userId, nickname, score }) => {
-    console.log(`[send-message] roomId: ${roomId}, userId: ${userId}, nickname: ${nickname}, message: ${message}`);
-    const messageData = {
-      id: Date.now(),
-      roomId,
-      userId,
-      nickname,
-      message,
-      score, // ← 추가!
-      timestamp: new Date().toISOString()
-    };
-    
-    // 채팅방의 모든 사용자에게 메시지 전송
-    io.to(roomId).emit('new-message', messageData);
+  socket.on('send-message', (msg) => {
+    // 클라이언트에서 보낸 id를 그대로 사용
+    console.log(`[send-message] roomId: ${msg.roomId}, userId: ${msg.userId}, nickname: ${msg.nickname}, message: ${msg.message}`);
+    io.to(msg.roomId).emit('new-message', msg);
+  });
+
+  // 점수 업데이트
+  socket.on('update-score', ({ id, roomId, score }) => {
+    // DB 업데이트 생략 (메모리 기반)
+    io.to(roomId).emit('update-score', { id, score });
   });
 
   // 타이핑 상태

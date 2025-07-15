@@ -159,33 +159,64 @@ export default function ChatRoom({ chatRoom, onBack }) {
     };
   }, [chatRoom, user]);
 
+  // 메시지 상태는 컴포넌트 내에서 한 번만 선언되어야 합니다.
+  // 중복 선언된 const [messages, setMessages] = useState([]); 줄을 모두 제거하고, 맨 위의 선언만 남깁니다.
+
+  // 소켓 메시지 수신 (new-message, update-score)
+  useEffect(() => {
+    if (!socket) return;
+    const handleNewMessage = (msg) => setMessages(prev => {
+      // 중복 방지: id가 이미 있으면 추가하지 않음
+      if (prev.some(m => m.id === msg.id)) return prev;
+      return [...prev, msg];
+    });
+    const handleUpdateScore = ({ id, score }) =>
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, score } : m));
+    socket.on('new-message', handleNewMessage);
+    socket.on('update-score', handleUpdateScore);
+    return () => {
+      socket.off('new-message', handleNewMessage);
+      socket.off('update-score', handleUpdateScore);
+    };
+  }, [socket]);
+
+  // handleSendMessage는 한 번만 선언되어야 하므로, 기존 선언을 모두 제거하고, 타이머 로직이 포함된 새 선언만 남깁니다.
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !socket) return;
-
-    // 1. Perplexity, Gemini 평가 요청 (동시에)
-    let perplexityScore = null;
-    let geminiScore = null;
-    let avgScore = null;
+    if (!newMessage.trim() || !socket || inputDisabled) return;
+    // 타이머 즉시 리셋 (사용자가 메시지를 입력하자마자)
+    setTimeLeft(CHAT_TIME_LIMIT);
+    setInputDisabled(false);
+    // 임시 메시지 id
+    const tempId = Date.now() + Math.random();
+    const messageData = {
+      id: tempId,
+      roomId: chatRoom._id,
+      message: newMessage.trim(),
+      userId: user.id,
+      nickname: user.nickname,
+      score: undefined,
+      timestamp: new Date().toISOString()
+    };
+    // 1. 서버에만 메시지 전송 (로컬에 직접 추가하지 않음)
+    socket.emit('send-message', messageData);
+    setNewMessage('');
+    // 타이핑 상태 해제
+    socket.emit('typing', {
+      roomId: chatRoom._id,
+      nickname: user.nickname,
+      isTyping: false
+    });
+    // 2. 점수 평가 비동기 요청
     try {
       const results = await Promise.allSettled([
         evaluateMessage(newMessage.trim()),
         evaluateMessageWithGemini(newMessage.trim())
       ]);
-      
-      // Perplexity는 항상 성공한다고 가정
-      perplexityScore = results[0].value;
-      
-      // Gemini 결과 처리
-      if (results[1].status === 'fulfilled') {
-        geminiScore = results[1].value;
-      } else {
-        console.error('Gemini 평가 실패:', results[1].reason);
-      }
-      
-      // 평균 계산 (Gemini가 실패하면 Perplexity만 사용)
+      let perplexityScore = results[0].value;
+      let geminiScore = results[1].status === 'fulfilled' ? results[1].value : null;
+      let avgScore = null;
       if (geminiScore) {
-        // Gemini도 성공한 경우 평균 계산
         avgScore = {};
         for (const key of Object.keys(perplexityScore)) {
           if (geminiScore[key] !== undefined) {
@@ -193,30 +224,13 @@ export default function ChatRoom({ chatRoom, onBack }) {
           }
         }
       } else {
-        // Gemini가 실패한 경우 Perplexity 결과만 사용
         avgScore = perplexityScore;
       }
+      // 3. 점수 받아오면 서버에 update-score로 알림
+      socket.emit('update-score', { id: tempId, roomId: chatRoom._id, score: avgScore });
     } catch (err) {
       console.error('메시지 평가 실패:', err);
     }
-
-    const messageData = {
-      roomId: chatRoom._id,
-      message: newMessage.trim(),
-      userId: user.id,
-      nickname: user.nickname,
-      score: avgScore // 평균 점수만 저장
-    };
-
-    socket.emit('send-message', messageData);
-    setNewMessage('');
-
-    // 타이핑 상태 해제
-    socket.emit('typing', {
-      roomId: chatRoom._id,
-      nickname: user.nickname,
-      isTyping: false
-    });
   };
 
   const handleTyping = (e) => {
@@ -279,6 +293,38 @@ export default function ChatRoom({ chatRoom, onBack }) {
     setOpenScoreIds(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  // 채팅 입력 타이머 상태
+  const CHAT_TIME_LIMIT = 10; // 초
+  const [timeLeft, setTimeLeft] = useState(CHAT_TIME_LIMIT);
+  const [inputDisabled, setInputDisabled] = useState(false);
+  const timerRef = useRef();
+  const timerStartRef = useRef();
+
+  // 타이머 시작/리셋 로직 (Date.now() 기반)
+  useEffect(() => {
+    if (inputDisabled) return;
+    setTimeLeft(CHAT_TIME_LIMIT);
+    timerStartRef.current = Date.now();
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      const elapsed = (Date.now() - timerStartRef.current) / 1000;
+      const left = +(CHAT_TIME_LIMIT - elapsed).toFixed(3);
+      if (left <= 0) {
+        clearInterval(timerRef.current);
+        setTimeLeft(0);
+        setInputDisabled(true);
+        setTimeout(() => {
+          alert('패배하였습니다');
+        }, 100);
+      } else {
+        setTimeLeft(left);
+      }
+    }, 30);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [inputDisabled]);
+
   return (
     <div className="w-full h-screen bg-black flex flex-row">
       {/* 메인 채팅창 */}
@@ -313,7 +359,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {messages.map((message) => {
             const isMine = message.userId === user.id;
-            const hasScore = !!message.score;
+            const hasScore = message.score !== undefined && message.score !== null;
             const scoreSum = hasScore ? getScoreSum(message.score) : 0;
             const borderColor = hasScore ? getScoreColor(scoreSum) : '';
             return (
@@ -340,26 +386,32 @@ export default function ChatRoom({ chatRoom, onBack }) {
                     <div className="text-xs opacity-75">
                       {formatTime(message.timestamp)}
                     </div>
-                    {hasScore && (
-                      <button
-                        onClick={() => toggleScore(message.id)}
-                        className={`ml-1 text-xs focus:outline-none ${isMine ? 'text-black' : 'text-white'} hover:opacity-80`}
-                        title="점수 보기"
-                      >
-                        ▼
-                      </button>
-                    )}
+                    {/* ▼ 버튼은 항상 표시, 점수 없으면 로딩 */}
+                    <button
+                      onClick={() => toggleScore(message.id)}
+                      className={`ml-1 text-xs focus:outline-none ${isMine ? 'text-black' : 'text-white'} hover:opacity-80`}
+                      title="점수 보기"
+                    >
+                      ▼
+                    </button>
                   </div>
                   {/* 점수: 펼침 상태일 때만 표시 */}
-                  {hasScore && openScoreIds[message.id] && (
-                    <div className="text-xs mt-2 font-mono border-t border-gray-600 pt-1">
-                      <div className="flex gap-2 items-center">
-                        <span className="font-bold">총점: <span className="text-lg" style={{color: scoreSum >= 15 ? '#3b82f6' : scoreSum <= 8 ? '#ef4444' : '#f59e42'}}>{scoreSum}</span></span>
-                        <span className="text-blue-700 font-bold">(
-                          {Object.entries(message.score).map(([k, v]) => `${k}:${v}`).join(', ')}
-                        )</span>
+                  {openScoreIds[message.id] && (
+                    hasScore ? (
+                      <div className="text-xs mt-2 font-mono border-t border-gray-600 pt-1">
+                        <div className="flex gap-2 items-center">
+                          <span className="font-bold">총점: <span className="text-lg" style={{color: scoreSum >= 15 ? '#3b82f6' : scoreSum <= 8 ? '#ef4444' : '#f59e42'}}>{scoreSum}</span></span>
+                          <span className="text-blue-700 font-bold">(
+                            {Object.entries(message.score).map(([k, v]) => `${k}:${v}`).join(', ')}
+                          )</span>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="flex justify-center items-center py-2">
+                        <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin inline-block"></span>
+                        <span className="ml-2 text-xs text-gray-400">점수 평가중...</span>
+                      </div>
+                    )
                   )}
                 </div>
               </div>
@@ -376,6 +428,17 @@ export default function ChatRoom({ chatRoom, onBack }) {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* 남은 시간 표시 */}
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
+          <div className="bg-black bg-opacity-80 px-6 py-2 rounded-full border-2 border-green-400 text-2xl font-mono text-green-300 font-bold shadow-lg">
+            {timeLeft >= 1
+              ? Math.ceil(timeLeft) + '초'
+              : timeLeft > 0
+                ? timeLeft.toFixed(3) + '초'
+                : '0초'}
+          </div>
+        </div>
+
         {/* 메시지 입력 */}
         <div className="bg-gray-900 p-4 border-t border-green-400">
           {userRole === 'participant' ? (
@@ -386,10 +449,11 @@ export default function ChatRoom({ chatRoom, onBack }) {
                 onChange={handleTyping}
                 placeholder="메시지를 입력하세요..."
                 className="flex-1 bg-gray-800 border border-green-400 text-green-400 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent font-mono"
+                disabled={inputDisabled}
               />
               <button
                 type="submit"
-                disabled={!newMessage.trim()}
+                disabled={!newMessage.trim() || inputDisabled}
                 className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-black py-3 px-6 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-green-400 hover:border-green-300"
               >
                 전송
