@@ -313,7 +313,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
     if (!socket) return;
     // 턴 변경
     const handleTurnChanged = ({ currentTurnUserId }) => {
-      console.log('turn-changed:', currentTurnUserId); // 디버깅용
+      console.log('turn-changed:', currentTurnUserId, '내 user.id:', user.id, typeof user.id, typeof currentTurnUserId); // 디버깅용
       setCurrentTurnUserId(currentTurnUserId);
     };
     // 타이머 동기화
@@ -330,6 +330,8 @@ export default function ChatRoom({ chatRoom, onBack }) {
     socket.on('turn-changed', handleTurnChanged);
     socket.on('turn-timer', handleTurnTimer);
     socket.on('turn-timeout', handleTurnTimeout);
+    // 추가: 마운트 시 내 user.id 로그
+    console.log('[ChatRoom mount] 내 user.id:', user.id, typeof user.id);
     return () => {
       socket.off('turn-changed', handleTurnChanged);
       socket.off('turn-timer', handleTurnTimer);
