@@ -86,15 +86,35 @@ io.on('connection', (socket) => {
   });
 
   // leave-room 이벤트 처리
-  socket.on('leave-room', ({ roomId, userId, nickname }) => {
+  socket.on('leave-room', async ({ roomId, userId, nickname }) => {
     // 참가자만 퇴장 메시지
     const userInfo = connectedUsers.get(socket.id);
     if (userInfo && userInfo.role === 'participant') {
       socket.to(roomId).emit('user-left', { nickname });
     }
     connectedUsers.delete(socket.id);
+    // DB에서 해당 유저를 참가자/배심원에서 제거
+    try {
+      const chatRoom = await ChatRoom.findById(roomId);
+      if (chatRoom) {
+        // 참가자에서 제거
+        const beforeCount = chatRoom.participants.length;
+        chatRoom.participants = chatRoom.participants.filter(id => id.toString() !== userId);
+        if (beforeCount !== chatRoom.participants.length) {
+          chatRoom.currentParticipants = chatRoom.participants.length;
+        }
+        // 배심원에서 제거
+        if (chatRoom.jury) {
+          chatRoom.jury = chatRoom.jury.filter(id => id.toString() !== userId);
+        }
+        await chatRoom.save();
+      }
+    } catch (err) {
+      console.error('leave-room DB 업데이트 실패:', err);
+    }
     // 대기룸/채팅방 유저 목록 갱신
     broadcastWaitingRoomUpdate(roomId);
+    io.emit('chatroom-list-update');
     socket.leave(roomId);
     console.log(`[leave-room] ${nickname}님이 방(${roomId})에서 나갔습니다.`);
   });

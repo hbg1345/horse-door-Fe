@@ -330,10 +330,16 @@ export default function ChatRoom({ chatRoom, onBack }) {
 
   // 나가기 버튼 핸들러
   const handleLeaveRoom = () => {
+    // 참가자인 경우 확인 모달
+    if (userRole === 'participant') {
+      if (!window.confirm('정말로 채팅방에서 나가시겠습니까?')) {
+        return;
+      }
+    }
     if (socket && chatRoom && user) {
       socket.emit('leave-room', { roomId: chatRoom._id, userId: user.id, nickname: user.nickname });
     }
-    if (onBack) onBack(); // navigate('/dashboard') 대신 onBack() 호출
+    if (onBack) onBack();
   };
 
   return (
