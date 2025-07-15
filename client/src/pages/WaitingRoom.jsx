@@ -578,7 +578,7 @@ export default function WaitingRoom() {
             disabled={!(room.participants && room.readyParticipants && room.participants.every(p => room.readyParticipants.map(String).includes(String(p._id || p.id))))}
             onClick={async () => {
               try {
-                await fetch(`/api/chatroom/chatrooms/${roomId}/start-chat`, { method: 'POST', credentials: 'include' });
+                await fetch(`/api/chatrooms/${roomId}/start-chat`, { method: 'POST', credentials: 'include' });
               } catch (e) {
                 alert('채팅 시작 실패: ' + (e?.response?.data?.error || e.message));
               }
@@ -592,7 +592,7 @@ export default function WaitingRoom() {
               className="bg-yellow-400 hover:bg-yellow-500 text-black py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-yellow-300 hover:border-yellow-200 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
               onClick={async () => {
                 try {
-                  await fetch(`/api/chatroom/chatrooms/${roomId}/unready`, { method: 'POST', credentials: 'include' });
+                  await fetch(`/api/chatrooms/${roomId}/unready`, { method: 'POST', credentials: 'include' });
                   await fetchRoom();
                 } catch (e) {
                   alert('준비 해제 실패: ' + (e?.response?.data?.error || e.message));
@@ -606,7 +606,7 @@ export default function WaitingRoom() {
               className="bg-blue-500 hover:bg-blue-600 text-white py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-blue-400 hover:border-blue-300 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
               onClick={async () => {
                 try {
-                  await fetch(`/api/chatroom/chatrooms/${roomId}/ready`, { method: 'POST', credentials: 'include' });
+                  await fetch(`/api/chatrooms/${roomId}/ready`, { method: 'POST', credentials: 'include' });
                   await fetchRoom();
                 } catch (e) {
                   alert('준비 실패: ' + (e?.response?.data?.error || e.message));
