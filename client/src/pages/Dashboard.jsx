@@ -4,6 +4,7 @@ import { getChatRooms, createChatRoom, getChatRoom, deleteChatRoom } from '../li
 import CreateChatRoomModal from '../components/CreateChatRoomModal';
 import ChatRoom from '../components/ChatRoom';
 import { useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -20,6 +21,15 @@ export default function Dashboard() {
   // 채팅방 목록 로드
   useEffect(() => {
     loadChatRooms();
+    const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
+      withCredentials: true
+    });
+    socket.on('chatroom-list-update', () => {
+      loadChatRooms();
+    });
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const loadChatRooms = async () => {
@@ -49,8 +59,7 @@ export default function Dashboard() {
     try {
       const newChatRoom = await createChatRoom(chatRoomData);
       setChatRooms([newChatRoom, ...chatRooms]);
-      setSelectedChatRoom(newChatRoom);
-      setIsModalOpen(false);
+      navigate(`/waiting-room/${newChatRoom._id}`);
     } catch (err) {
       console.error('채팅방 생성 실패:', err);
       setError('채팅방 생성에 실패했습니다.');

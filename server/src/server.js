@@ -6,6 +6,7 @@ const { PORT } = require('./config/env');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const ChatRoom = require('./models/ChatRoom');
+const { setSocketIO } = require('./socketUtils');
 
 const server = createServer(app);
 const io = new Server(server, {
@@ -15,8 +16,14 @@ const io = new Server(server, {
   }
 });
 
+setSocketIO(io);
+
 // Socket.IO 연결 관리
 const connectedUsers = new Map(); // socketId -> { userId, nickname, roomId }
+
+function broadcastWaitingRoomUpdate(roomId) {
+  io.to(roomId).emit('waiting-room-update');
+}
 
 io.on('connection', (socket) => {
   console.log('사용자 연결:', socket.id);

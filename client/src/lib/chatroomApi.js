@@ -58,4 +58,16 @@ export const patchChatRoomRole = async (id, userId, role) => {
 export const joinAsWaiter = async (id) => {
   const response = await api.post(`/api/chatrooms/${id}/wait`);
   return response.data;
+};
+
+// 대기룸 나가기
+export const leaveWaitingRoom = async (id) => {
+  const response = await api.post(`/api/chatrooms/${id}/leave-waitingroom`);
+  return response.data;
+};
+
+// 대기룸 입장 시 배심원(jury)으로 추가
+export const joinAsJury = async (id) => {
+  const response = await api.post(`/api/chatrooms/${id}/join-jury`);
+  return response.data;
 }; 
