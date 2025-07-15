@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getChatRooms, createChatRoom, getChatRoom, deleteChatRoom } from '../lib/chatroomApi';
 import CreateChatRoomModal from '../components/CreateChatRoomModal';
 import ChatRoom from '../components/ChatRoom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
 
 export default function Dashboard() {
@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   const navigate = useNavigate();
+  const location = useLocation();
 
   // 채팅방 목록 로드
   useEffect(() => {
@@ -31,6 +32,22 @@ export default function Dashboard() {
       socket.disconnect();
     };
   }, []);
+
+  // 대기룸에서 채팅 시작 시 바로 채팅방 입장
+  useEffect(() => {
+    if (location.state?.enterRoomId) {
+      (async () => {
+        try {
+          const updatedChatRoom = await getChatRoom(location.state.enterRoomId);
+          setSelectedChatRoom(updatedChatRoom);
+          setIsInChat(true);
+        } catch (err) {
+          setError('채팅방 정보를 불러오는데 실패했습니다.');
+        }
+      })();
+    }
+    // eslint-disable-next-line
+  }, [location.state?.enterRoomId]);
 
   const loadChatRooms = async () => {
     try {
