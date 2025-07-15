@@ -70,4 +70,26 @@ export const leaveWaitingRoom = async (id) => {
 export const joinAsJury = async (id) => {
   const response = await api.post(`/api/chatrooms/${id}/join-jury`);
   return response.data;
+};
+
+// 배심원 → 참가자
+export const juryToParticipant = async (id, userId) => {
+  const response = await api.patch(`/api/chatrooms/${id}/jury-to-participant`, { userId });
+  return response.data;
+};
+// 참가자 → 배심원
+export const participantToJury = async (id, userId) => {
+  const response = await api.patch(`/api/chatrooms/${id}/participant-to-jury`, { userId });
+  return response.data;
+};
+// 배심원 나가기
+export const juryLeave = async (id) => {
+  const response = await api.post(`/api/chatrooms/${id}/jury-leave`);
+  return response.data;
+};
+
+// 방장이 배심원 강제 퇴장
+export const juryKick = async (id, userId) => {
+  const response = await api.delete(`/api/chatrooms/${id}/jury/${userId}`);
+  return response.data;
 }; 
