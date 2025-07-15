@@ -318,7 +318,8 @@ export default function WaitingRoom() {
     ? room.participants.map(p => p._id || p.id).filter(id => String(id) !== String(ownerId))
     : [];
   const readyIds = room.readyParticipants ? room.readyParticipants.map(String) : [];
-  const allReady = participantIds.length > 0 && participantIds.every(id => readyIds.includes(String(id)));
+  // 수정: 참가자가 없어도 시작 가능하도록 조건 변경
+  const allReady = participantIds.every(id => readyIds.includes(String(id)));
   // 디버깅용 로그
   console.log('ownerId:', ownerId);
   console.log('participantIds:', participantIds);
