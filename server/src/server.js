@@ -21,6 +21,9 @@ setSocketIO(io);
 // Socket.IO 연결 관리
 const connectedUsers = new Map(); // socketId -> { userId, nickname, roomId }
 
+// roomId별 턴/타이머 상태 저장
+const turnStateMap = new Map(); // roomId -> { currentTurnUserId, timer, timerRef }
+
 function broadcastWaitingRoomUpdate(roomId) {
   io.to(roomId).emit('waiting-room-update');
 }
@@ -29,7 +32,7 @@ io.on('connection', (socket) => {
   console.log('사용자 연결:', socket.id);
 
   // 채팅방 입장
-  socket.on('join-room', ({ roomId, userId, nickname, role }) => {
+  socket.on('join-room', async ({ roomId, userId, nickname, role }) => {
     console.log(`[join-room] roomId: ${roomId}, userId: ${userId}, nickname: ${nickname}, role: ${role}`);
     socket.join(roomId);
     connectedUsers.set(socket.id, { userId, nickname, roomId, role });
@@ -37,13 +40,81 @@ io.on('connection', (socket) => {
     if (role === 'participant') {
       socket.to(roomId).emit('user-joined', { nickname });
     }
+    // --- 추가: 참가자 2명 모두 입장 시 턴 시작 ---
+    // 참가자 목록 확인
+    const roomSockets = io.sockets.adapter.rooms.get(roomId);
+    if (roomSockets && roomSockets.size === 2) { // 실제 소켓방 인원 2명 체크
+      // 현재 소켓방에 참가자 userId만 추출
+      const participantUserIds = Array.from(roomSockets)
+        .map(sid => connectedUsers.get(sid))
+        .filter(u => u && u.roomId === roomId && u.role === 'participant')
+        .map(u => u.userId);
+      if (participantUserIds.length === 2) {
+        // 턴 상태가 이미 시작된 방은 중복 emit 방지
+        if (!turnStateMap.has(roomId) || !turnStateMap.get(roomId).currentTurnUserId) {
+          // DB에서 방장 userId 찾기
+          const chatRoom = await ChatRoom.findById(roomId).populate('createdBy');
+          if (!chatRoom || !chatRoom.createdBy) return;
+          const ownerId = chatRoom.createdBy._id.toString();
+          if (!turnStateMap.has(roomId)) turnStateMap.set(roomId, {});
+          const state = turnStateMap.get(roomId);
+          state.currentTurnUserId = ownerId;
+          state.timer = 10;
+          // 타이머 시작
+          if (state.timerRef) clearInterval(state.timerRef);
+          state.timerRef = setInterval(() => {
+            state.timer -= 0.03;
+            if (state.timer <= 0) {
+              clearInterval(state.timerRef);
+              io.to(roomId).emit('turn-timeout', { loserUserId: String(state.currentTurnUserId) });
+            } else {
+              io.to(roomId).emit('turn-timer', { timeLeft: Math.max(0, +state.timer.toFixed(3)), currentTurnUserId: String(state.currentTurnUserId) });
+            }
+          }, 30);
+          console.log('[join-room] emit turn-changed:', String(state.currentTurnUserId));
+          io.to(roomId).emit('turn-changed', { currentTurnUserId: String(state.currentTurnUserId) });
+          io.to(roomId).emit('turn-timer', { timeLeft: state.timer, currentTurnUserId: String(state.currentTurnUserId) });
+        }
+      }
+    }
   });
 
-  // 메시지 전송
+  // 메시지 전송 (턴제)
   socket.on('send-message', (msg) => {
-    // 클라이언트에서 보낸 id를 그대로 사용
-    console.log(`[send-message] roomId: ${msg.roomId}, userId: ${msg.userId}, nickname: ${msg.nickname}, message: ${msg.message}`);
-    io.to(msg.roomId).emit('new-message', msg);
+    const state = turnStateMap.get(msg.roomId);
+    if (!state || state.currentTurnUserId !== msg.userId) {
+      // 턴이 아닌데 메시지 보내면 무시
+      return;
+    }
+    // 참가자 목록에서 상대방 userId 찾기
+    ChatRoom.findById(msg.roomId).populate('participants').then(chatRoom => {
+      if (!chatRoom) return;
+      const users = chatRoom.participants.map(u => u._id.toString());
+      if (users.length !== 2) {
+        io.to(msg.roomId).emit('system-message', { message: '참가자 2명일 때만 채팅이 가능합니다.' });
+        return;
+      }
+      // 메시지 전송
+      io.to(msg.roomId).emit('new-message', msg);
+      // 턴 전환
+      const nextTurnUserId = users.find(id => id !== msg.userId);
+      state.currentTurnUserId = nextTurnUserId;
+      state.timer = 10;
+      // 타이머 리셋
+      if (state.timerRef) clearInterval(state.timerRef);
+      state.timerRef = setInterval(() => {
+        state.timer -= 0.03;
+        if (state.timer <= 0) {
+          clearInterval(state.timerRef);
+          io.to(msg.roomId).emit('turn-timeout', { loserUserId: String(state.currentTurnUserId) });
+        } else {
+          io.to(msg.roomId).emit('turn-timer', { timeLeft: Math.max(0, +state.timer.toFixed(3)), currentTurnUserId: String(state.currentTurnUserId) });
+        }
+      }, 30);
+      console.log('[send-message] emit turn-changed:', String(state.currentTurnUserId), 'all users:', users, 'msg.userId:', msg.userId);
+      io.to(msg.roomId).emit('turn-changed', { currentTurnUserId: String(state.currentTurnUserId) });
+      io.to(msg.roomId).emit('turn-timer', { timeLeft: state.timer, currentTurnUserId: String(state.currentTurnUserId) });
+    });
   });
 
   // 점수 업데이트
@@ -80,8 +151,18 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 채팅 시작(강제 이동)
-  socket.on('start-chat', ({ roomId }) => {
+  // 채팅 시작(강제 이동, 턴제 시작)
+  socket.on('start-chat', async ({ roomId }) => {
+    // 실제 소켓방 인원 체크
+    const roomSockets = io.sockets.adapter.rooms.get(roomId);
+    if (!roomSockets || roomSockets.size < 2) {
+      io.to(roomId).emit('system-message', { message: '실제 접속 인원이 2명 이상일 때만 채팅이 시작됩니다.' });
+      return;
+    }
+    // 방장 userId 찾기
+    const chatRoom = await ChatRoom.findById(roomId).populate('createdBy').populate('participants');
+    if (!chatRoom || !chatRoom.createdBy) return;
+    // --- 수정: 턴 상태/turn-changed emit 제거, start-chat만 emit ---
     io.to(roomId).emit('start-chat');
   });
 
@@ -93,6 +174,10 @@ io.on('connection', (socket) => {
       socket.to(roomId).emit('user-left', { nickname });
     }
     connectedUsers.delete(socket.id);
+    // --- 추가: 참가자 나가면 턴 상태 리셋 ---
+    if (turnStateMap.has(roomId)) {
+      turnStateMap.get(roomId).currentTurnUserId = null;
+    }
     // DB에서 해당 유저를 참가자/배심원에서 제거
     try {
       const chatRoom = await ChatRoom.findById(roomId);
@@ -138,6 +223,10 @@ io.on('connection', (socket) => {
       // 오직 참가자만 퇴장 메시지
       if (userInfo.role === 'participant') {
         socket.to(userInfo.roomId).emit('user-left', { nickname: userInfo.nickname });
+      }
+      // --- 추가: 연결 해제 시 턴 상태 리셋 ---
+      if (userInfo.roomId && turnStateMap.has(userInfo.roomId)) {
+        turnStateMap.get(userInfo.roomId).currentTurnUserId = null;
       }
       connectedUsers.delete(socket.id);
       console.log(`${userInfo.nickname}님이 연결을 해제했습니다.`);
