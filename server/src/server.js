@@ -22,14 +22,14 @@ io.on('connection', (socket) => {
   console.log('사용자 연결:', socket.id);
 
   // 채팅방 입장
-  socket.on('join-room', ({ roomId, userId, nickname }) => {
-    console.log(`[join-room] roomId: ${roomId}, userId: ${userId}, nickname: ${nickname}`);
+  socket.on('join-room', ({ roomId, userId, nickname, role }) => {
+    console.log(`[join-room] roomId: ${roomId}, userId: ${userId}, nickname: ${nickname}, role: ${role}`);
     socket.join(roomId);
-    connectedUsers.set(socket.id, { userId, nickname, roomId });
-    console.log(`${nickname}님이 채팅방 ${roomId}에 입장했습니다.`);
-    
-    // 채팅방에 입장 메시지 전송
-    socket.to(roomId).emit('user-joined', { nickname });
+    connectedUsers.set(socket.id, { userId, nickname, roomId, role });
+    // 오직 참가자만 입장 메시지
+    if (role === 'participant') {
+      socket.to(roomId).emit('user-joined', { nickname });
+    }
   });
 
   // 메시지 전송
@@ -81,7 +81,10 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const userInfo = connectedUsers.get(socket.id);
     if (userInfo) {
-      socket.to(userInfo.roomId).emit('user-left', { nickname: userInfo.nickname });
+      // 오직 참가자만 퇴장 메시지
+      if (userInfo.role === 'participant') {
+        socket.to(userInfo.roomId).emit('user-left', { nickname: userInfo.nickname });
+      }
       connectedUsers.delete(socket.id);
       console.log(`${userInfo.nickname}님이 연결을 해제했습니다.`);
     }

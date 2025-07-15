@@ -4,10 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { evaluateMessage, evaluateMessageWithGemini } from '../lib/chatroomApi';
 
 // 관전 전용 채팅 컴포넌트
-function SpectatorChatRoom({ chatRoom, user, userRole, onClose }) {
+function SpectatorChatRoom({ chatRoom, user, userRole, socket, onClose }) {
   const [messages, setMessages] = useState(chatRoom.spectatorMessages || []);
   const [newMessage, setNewMessage] = useState('');
-  const [socket, setSocket] = useState(null);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -15,23 +14,13 @@ function SpectatorChatRoom({ chatRoom, user, userRole, onClose }) {
   }, [chatRoom.spectatorMessages]);
 
   useEffect(() => {
-    if (!chatRoom || !user) return;
-    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
-      withCredentials: true
-    });
-    newSocket.on('connect', () => {
-      newSocket.emit('join-room', {
-        roomId: chatRoom._id,
-        userId: user.id,
-        nickname: user.nickname
-      });
-    });
-    newSocket.on('new-spectator-message', (msg) => {
-      setMessages(prev => [...prev, msg]);
-    });
-    setSocket(newSocket);
-    return () => newSocket.disconnect();
-  }, [chatRoom, user]);
+    if (!socket) return;
+    const handler = (msg) => setMessages(prev => [...prev, msg]);
+    socket.on('new-spectator-message', handler);
+    return () => {
+      socket.off('new-spectator-message', handler);
+    };
+  }, [socket]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -378,6 +367,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
           chatRoom={chatRoom}
           user={user}
           userRole={userRole}
+          socket={socket}
           onClose={() => setShowSpectatorChat(false)}
         />
       )}
