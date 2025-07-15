@@ -108,10 +108,22 @@ io.on('connection', (socket) => {
           chatRoom.jury = chatRoom.jury.filter(id => id.toString() !== userId);
         }
         await chatRoom.save();
+        // 방에 아무도 없으면 방 삭제
+        if (chatRoom.participants.length === 0 && (!chatRoom.jury || chatRoom.jury.length === 0)) {
+          await ChatRoom.deleteOne({ _id: roomId });
+          io.emit('chatroom-list-update');
+        }
       }
     } catch (err) {
       console.error('leave-room DB 업데이트 실패:', err);
     }
+    // 모든 소켓(본인 포함)에 시스템 메시지 브로드캐스트
+    io.to(roomId).emit('new-message', {
+      id: Date.now(),
+      type: 'system',
+      message: `${nickname}님이 나가셨습니다.`,
+      timestamp: new Date().toISOString()
+    });
     // 대기룸/채팅방 유저 목록 갱신
     broadcastWaitingRoomUpdate(roomId);
     io.emit('chatroom-list-update');
