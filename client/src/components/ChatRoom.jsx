@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { evaluateMessage, evaluateMessageWithGemini } from '../lib/chatroomApi';
 
 // 관전 전용 채팅 컴포넌트
-function SpectatorChatRoom({ chatRoom, user, userRole }) {
+function SpectatorChatRoom({ chatRoom, user, userRole, onClose }) {
   const [messages, setMessages] = useState(chatRoom.spectatorMessages || []);
   const [newMessage, setNewMessage] = useState('');
   const [socket, setSocket] = useState(null);
@@ -50,8 +50,17 @@ function SpectatorChatRoom({ chatRoom, user, userRole }) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 border-l border-gray-700 w-80 min-w-64">
-      <div className="p-2 border-b border-green-400 text-green-400 font-bold text-center font-mono">관전 전용 채팅</div>
+    <div className="flex flex-col h-full bg-gray-900 border-l border-gray-700 w-80 min-w-64 relative">
+      <div className="p-2 border-b border-green-400 text-green-400 font-bold text-center font-mono flex items-center justify-center relative">
+        관전 전용 채팅
+        <button
+          onClick={onClose}
+          className="absolute right-2 top-1 text-gray-400 hover:text-red-400 text-lg font-bold px-2"
+          title="닫기"
+        >
+          ×
+        </button>
+      </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {messages.map((msg, idx) => (
           <div key={idx} className="bg-gray-800 rounded-md px-3 py-2 text-sm text-gray-200">
@@ -95,6 +104,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
   const [socket, setSocket] = useState(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const [showSpectatorChat, setShowSpectatorChat] = useState(true);
 
   // 스크롤을 맨 아래로
   const scrollToBottom = () => {
@@ -275,6 +285,21 @@ export default function ChatRoom({ chatRoom, onBack }) {
               {chatRoom.currentParticipants}/{chatRoom.maxParticipants}명
             </p>
           </div>
+          <div className="flex gap-2 items-center">
+            {!showSpectatorChat && (
+              <button
+                onClick={() => setShowSpectatorChat(true)}
+                className="bg-gray-700 hover:bg-green-600 text-green-300 hover:text-white py-2 px-3 rounded-lg font-mono font-bold border-2 border-green-400 hover:border-green-300 transition-all duration-200"
+              >
+                관전채팅 열기
+              </button>
+            )}
+            <button
+              onClick={onBack}
+              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-gray-500 hover:border-gray-400"
+            >
+              뒤로 가기
+            </button>
           <button
             onClick={onBack}
             className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-gray-500 hover:border-gray-400"
