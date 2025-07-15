@@ -92,4 +92,20 @@ export const juryLeave = async (id) => {
 export const juryKick = async (id, userId) => {
   const response = await api.delete(`/api/chatrooms/${id}/jury/${userId}`);
   return response.data;
+};
+
+// 상황설명(요약) 조회
+export const getChatRoomSummary = async (id) => {
+  const response = await api.get(`/api/chatrooms/${id}/summary`);
+  return response.data;
+};
+// 상황설명(요약) 저장
+export const saveChatRoomSummary = async (id, role, summary) => {
+  const response = await api.post(`/api/chatrooms/${id}/summary`, { role, summary });
+  return response.data;
+};
+// AI 요약 요청
+export const requestAiSummary = async (id) => {
+  const response = await api.post(`/api/chatrooms/${id}/ai-summary`);
+  return response.data;
 }; 

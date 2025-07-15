@@ -1,8 +1,9 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
-import { getChatRoom, juryToParticipant, participantToJury, juryLeave, juryKick, joinAsJury, leaveWaitingRoom } from '../lib/chatroomApi';
+import { getChatRoom, juryToParticipant, participantToJury, juryLeave, juryKick, joinAsJury, leaveWaitingRoom, getChatRoomSummary, saveChatRoomSummary, requestAiSummary } from '../lib/chatroomApi';
 import { useAuth } from '../contexts/AuthContext';
 import { io } from 'socket.io-client';
+import axios from 'axios';
 
 function LoadingOverlay() {
   return (
@@ -71,9 +72,62 @@ export default function WaitingRoom() {
   const [error, setError] = useState('');
   const [roleChangeLoading, setRoleChangeLoading] = useState('');
   const [showJuryDropdown, setShowJuryDropdown] = useState(false);
+  const [showJuryDropdownB, setShowJuryDropdownB] = useState(false); // 당사자B용
   const [jurySearch, setJurySearch] = useState('');
   const socketRef = useRef(null);
   const [roomDeleted, setRoomDeleted] = useState(false);
+  // 상황설명 상태
+  const [summaryA, setSummaryA] = useState('');
+  const [summaryB, setSummaryB] = useState('');
+  const [aiSummary, setAiSummary] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiRequested, setAiRequested] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  // 내 역할 구분
+  const myId = user?.id;
+  const isParticipantA = room?.participants?.[0]?._id === myId || room?.participants?.[0]?.id === myId;
+  const isParticipantB = room?.participants?.[1]?._id === myId || room?.participants?.[1]?.id === myId;
+  const isJury = room?.jury?.some(u => u._id === myId || u.id === myId);
+
+  // 상황설명 fetch
+  async function fetchSummary() {
+    setSummaryLoading(true);
+    try {
+      const res = await getChatRoomSummary(roomId);
+      setSummaryA(res.summaryA || '');
+      setSummaryB(res.summaryB || '');
+      setAiSummary(res.aiSummary || '');
+    } catch {
+      // 무시
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
+  useEffect(() => {
+    if (!roomId) return;
+    fetchSummary();
+    // eslint-disable-next-line
+  }, [roomId]);
+  // 소켓 waiting-room-update 시에도 fetchSummary
+  useEffect(() => {
+    if (!socketRef.current) return;
+    socketRef.current.on('waiting-room-update', fetchSummary);
+    return () => {
+      socketRef.current?.off('waiting-room-update', fetchSummary);
+    };
+  }, [socketRef.current]);
+
+  // 상황설명 입력 저장
+  async function handleSaveSummary(role, summary) {
+    setSummaryLoading(true);
+    try {
+      await saveChatRoomSummary(roomId, role, summary);
+      await fetchSummary();
+    } catch {}
+    setSummaryLoading(false);
+  }
+
+  // useState, useEffect, animateBoxes 등 애니메이션 관련 코드 제거
 
   async function fetchRoom() {
     try {
@@ -202,6 +256,48 @@ export default function WaitingRoom() {
     }
   };
 
+  // AI 요약 폴링 함수 (무한 반복)
+  async function handleAiSummaryPolling() {
+    setAiLoading(true);
+    setAiRequested(true);
+    let tries = 0;
+    const maxTries = 9999; // 사실상 무한 반복
+    async function poll() {
+      try {
+        const res = await requestAiSummary(roomId);
+        if (res.aiSummary) {
+          setAiSummary(res.aiSummary);
+          setAiRequested(false);
+          setAiLoading(false);
+        } else {
+          // 예외적 상황: aiSummary가 없으면 재시도
+          if (tries < maxTries) {
+            tries++;
+            setTimeout(poll, 1000);
+          } else {
+            // 시간 초과로 멈추지 않고 계속 폴링
+            setTimeout(poll, 1000);
+          }
+        }
+      } catch (e) {
+        // 상대방 입력 대기 에러면 계속 폴링 (aiRequested/aiLoading을 false로 바꾸지 않음)
+        if (e?.response?.data?.error?.includes('두 당사자의 상황설명이 모두 필요합니다')) {
+          if (tries < maxTries) {
+            tries++;
+            setTimeout(poll, 1000);
+          } else {
+            setTimeout(poll, 1000);
+          }
+        } else {
+          setAiSummary('AI 요약 실패: ' + (e?.response?.data?.error || e.message));
+          setAiRequested(false);
+          setAiLoading(false);
+        }
+      }
+    }
+    poll();
+  }
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-screen bg-gray-900">
       <div className="bg-gray-800 p-8 rounded-xl shadow-lg border border-green-400 mb-8 w-96 relative">
@@ -214,13 +310,10 @@ export default function WaitingRoom() {
   if (!room) return <div className="text-red-400">채팅방 정보가 없습니다.</div>;
 
   const isOwner = user && room.createdBy && user.id === room.createdBy._id;
-  const myId = user?.id;
-  const isParticipant = room.participants?.some(u => u._id === myId || u.id === myId);
-  const isJury = room.jury?.some(u => u._id === myId || u.id === myId);
   const participantCount = room.participants?.length || 0;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-900 via-green-950 to-gray-800">
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#111926' }}>
       {/* 상단: 방 정보 */}
       <div className="flex justify-between items-center px-12 py-8 border-b border-green-900">
         <div className="flex items-center gap-6">
@@ -244,20 +337,49 @@ export default function WaitingRoom() {
 
       {/* 중앙: 참가자/배심원 목록 (패널 전체 오른쪽 여백) */}
       <div className="flex-1 flex flex-col items-start gap-8 px-0 py-8 w-full pl-12 md:pl-20">
-        <div className="w-full max-w-xl bg-gray-800/80 rounded-2xl p-8 shadow-2xl border-2 border-green-700 min-w-[320px] mb-2">
-          <div className="flex items-center mb-4">
-            <h3 className="text-green-400 font-mono font-semibold text-2xl mr-2">참가자</h3>
-            {isOwner && room.jury?.length > 0 && (
-              <div className="relative">
+        {/* 당사자A/B 박스 (참가자 박스와 동일한 디자인, 배심원 박스와 가로폭 일치) */}
+        <div className="w-full max-w-xl flex flex-row gap-8 mb-2">
+          {/* 당사자A */}
+          <div
+            className="flex-1 min-w-0 bg-gray-800/80 rounded-2xl p-5 shadow-2xl border-2 border-green-700 flex flex-col items-start"
+          >
+            <h3 className="text-green-400 font-mono font-semibold text-2xl mb-4">당사자A</h3>
+            <div className="flex flex-wrap gap-2 w-full">
+              {room.participants && room.participants.length > 0 ?
+                room.participants.filter((_, idx) => idx % 2 === 0).map((user, idx) => (
+                  <span
+                    key={user._id || idx}
+                    className="inline-flex items-center rounded-full px-4 py-2 font-mono text-base w-auto font-bold"
+                    style={{
+                      backgroundColor: '#fff',
+                      color: '#222',
+                      border: '2px solid #64748b',
+                      boxShadow: '0 2px 8px 0 #0f172a33',
+                      fontWeight: 700
+                    }}
+                  >
+                    {user.nickname}
+                  </span>
+                )) : <span className="text-gray-400 font-mono">없음</span>}
+            </div>
+          </div>
+          {/* 당사자B */}
+          <div
+            className="flex-1 min-w-0 bg-gray-800/80 rounded-2xl p-5 shadow-2xl border-2 border-green-700 flex flex-col items-start"
+          >
+            <h3 className="text-blue-400 font-mono font-semibold text-2xl mb-2">당사자B</h3>
+            {room.participants && room.participants.filter((_, idx) => idx % 2 === 1).length === 0 && isOwner ? (
+              <div className="w-full flex justify-center relative mb-2">
                 <button
-                  className="group ml-2 p-1 rounded-full border-2 border-green-400 hover:border-green-600 bg-white hover:bg-green-100 transition flex items-center justify-center"
-                  onClick={() => setShowJuryDropdown(v => !v)}
+                  className="text-4xl font-bold"
+                  style={{ background: '#1a233a', color: '#6ee7b7', width: 56, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 0, boxShadow: 'none', cursor: 'pointer', marginTop: 0, marginBottom: 8 }}
+                  onClick={() => setShowJuryDropdownB(v => !v)}
                   title="배심원 참가자 승격"
                 >
-                  <UpArrowIcon className="w-6 h-6" />
+                  +
                 </button>
-                {showJuryDropdown && (
-                  <div className="absolute left-0 mt-2 bg-gray-900 border border-green-400 rounded shadow-lg z-10 min-w-[200px] p-3">
+                {showJuryDropdownB && (
+                  <div className="absolute left-1/2 -translate-x-1/2 mt-2 bg-gray-900 border border-green-400 rounded shadow-lg z-10 min-w-[200px] max-w-xs w-auto" style={{top: '100%'}}>
                     <input
                       type="text"
                       placeholder="배심원 검색..."
@@ -265,65 +387,153 @@ export default function WaitingRoom() {
                       onChange={e => setJurySearch(e.target.value)}
                       className="w-full mb-2 px-2 py-1 rounded bg-gray-800 border border-green-400 text-green-300 text-sm font-mono focus:outline-none"
                     />
-                    {room.jury.filter(jury => jury.nickname.includes(jurySearch)).map((jury, idx) => (
-                      <button
-                        key={jury._id}
-                        className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-green-600 disabled:bg-gray-400 rounded"
-                        onClick={() => handleJuryToParticipant(jury._id)}
-                        disabled={roleChangeLoading === jury._id + 'participant'}
-                      >
-                        {roleChangeLoading === jury._id + 'participant' ? '변경 중...' : jury.nickname}
-                      </button>
-                    ))}
-                    {room.jury.filter(jury => jury.nickname.includes(jurySearch)).length === 0 && (
+                    {room.jury && room.jury.filter(jury => jury.nickname.includes(jurySearch)).length > 0 ? (
+                      room.jury.filter(jury => jury.nickname.includes(jurySearch)).map((jury, idx) => (
+                        <button
+                          key={jury._id}
+                          className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-green-600 disabled:bg-gray-400 rounded"
+                          onClick={() => { handleJuryToParticipant(jury._id); setShowJuryDropdownB(false); }}
+                          disabled={roleChangeLoading === jury._id + 'participant'}
+                        >
+                          {roleChangeLoading === jury._id + 'participant' ? '변경 중...' : jury.nickname}
+                        </button>
+                      ))
+                    ) : (
                       <div className="px-4 py-2 text-gray-400 text-sm">배심원 없음</div>
                     )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {room.participants?.map((user, idx) => (
-              <div key={idx} className="flex items-center bg-green-700/80 text-white px-4 py-3 rounded-xl text-lg font-mono shadow gap-2">
-                <span>{user.nickname}</span>
-                {isOwner && user._id !== user.id && user._id !== myId && (
-                  <button
-                    className="group ml-2 p-1 rounded-full border-2 border-lime-400 hover:border-lime-500 bg-white hover:bg-lime-100 transition flex items-center justify-center"
-                    onClick={() => handleParticipantToJury(user._id)}
-                    disabled={roleChangeLoading === user._id + 'jury'}
-                    title="배심원으로 내리기"
+            ) : null}
+            <div className="flex flex-wrap gap-2 w-full items-center">
+              {room.participants && room.participants.filter((_, idx) => idx % 2 === 1).length > 0 ? (
+                room.participants.filter((_, idx) => idx % 2 === 1).map((user, idx) => (
+                  <span
+                    key={user._id || idx}
+                    className="inline-flex items-center rounded-full px-4 py-2 font-mono text-base w-auto font-bold"
+                    style={{
+                      backgroundColor: '#fff',
+                      color: '#222',
+                      border: '2px solid #64748b',
+                      boxShadow: '0 2px 8px 0 #0f172a33',
+                      fontWeight: 700
+                    }}
                   >
-                    <DownArrowIcon className="w-6 h-6" />
-                  </button>
-                )}
-              </div>
-            ))}
-            {(!room.participants || room.participants.length === 0) && (
-              <span className="text-gray-400 font-mono">참가자 없음</span>
-            )}
+                    {user.nickname}
+                  </span>
+                ))
+              ) : !isOwner ? (
+                <span className="text-gray-400 font-mono">없음</span>
+              ) : null}
+            </div>
           </div>
         </div>
-        <div className="w-full max-w-xl bg-gray-800/80 rounded-2xl p-8 shadow-2xl border-2 border-purple-700 min-w-[320px]">
+        {/* 배심원 패널 */}
+        <div
+          className="w-full max-w-xl bg-gray-800/80 rounded-2xl p-8 shadow-2xl border-2 border-purple-700 min-w-[320px] min-h-[480px]"
+        >
           <h3 className="text-purple-400 font-mono font-semibold text-2xl mb-4">배심원</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex flex-wrap gap-2 w-full">
             {room.jury?.length > 0 ? room.jury.map((user, idx) => (
-              <div key={idx} className="flex items-center bg-purple-700/80 text-white px-4 py-3 rounded-xl text-lg font-mono shadow gap-2">
-                <span>{user.nickname}</span>
-                {isOwner && user._id !== myId && (
-                  <button
-                    className="group ml-2 p-1 rounded-full border-2 border-purple-400 hover:border-purple-600 bg-white hover:bg-purple-100 transition flex items-center justify-center"
-                    onClick={() => handleJuryKick(user._id)}
-                    disabled={roleChangeLoading === user._id + 'kick'}
-                    title="강제 퇴장"
-                  >
-                    <PurpleXIcon className="w-6 h-6" />
-                  </button>
-                )}
-              </div>
-            )) : <span className="text-gray-400 font-mono">배심원 없음</span>}
+              <span
+                key={user._id || idx}
+                className="inline-flex items-center rounded-full px-4 py-2 font-mono text-base w-auto font-bold"
+                style={{
+                  backgroundColor: '#fff',
+                  color: '#222',
+                  border: '2px solid #64748b',
+                  boxShadow: '0 2px 8px 0 #0f172a33',
+                  fontWeight: 700
+                }}
+              >
+                {user.nickname}
+              </span>
+            )) : <span className="text-gray-400 font-mono text-center w-full">배심원이 없습니다. 우측 상단 초대 버튼을 누르고 url을 공유해보세요!</span>}
           </div>
         </div>
+      </div>
+      {/* 상황설명 박스 (화면 중앙에 고정, 내부 여유 공간 확보) */}
+      <div style={{position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 50, width: '100%', maxWidth: '32rem', minWidth: '18rem', padding: 24}} className="bg-gray-800/80 rounded-2xl shadow-2xl border-2 border-gray-600 min-h-[340px] flex flex-col items-center justify-center">
+        <div className="w-full mb-2 flex-shrink-0 flex items-center justify-center" style={{minHeight: 40}}>
+          <span className="text-white font-bold text-xl sm:text-2xl">상황 요약</span>
+        </div>
+        {/* AI 요약 버튼 누른 후 + 상대방 입력 전에는 스피너, 그 외에는 상황요약 박스 */}
+        {aiRequested && ((isParticipantA && !summaryB.trim()) || (isParticipantB && !summaryA.trim())) ? (
+          <div
+            className="w-full bg-gray-900/80 rounded-lg border-2 border-gray-500 flex flex-col items-center justify-center"
+            style={{minHeight: 400, maxHeight: 400, height: 400, padding: 32, boxSizing: 'border-box'}}
+          >
+            <LoadingOverlay />
+          </div>
+        ) : (
+          <div style={{width: '100%', margin: '24px 0'}}>
+            <div
+              className="w-full bg-gray-900/80 rounded-lg border-2 border-gray-500 flex flex-col items-center justify-center"
+              style={{minHeight: 400, maxHeight: 400, height: 400, padding: 32, boxSizing: 'border-box'}}
+            >
+              {/* 입력창: 내부 박스에만 렌더링 */}
+              {(isParticipantA || isParticipantB) && !aiSummary && !aiRequested && (
+                <>
+                  <textarea
+                    className="w-full h-full bg-transparent text-white font-mono text-xl sm:text-2xl border-none focus:outline-none resize-none"
+                    placeholder={isParticipantA ? '당사자A 상황 설명 입력' : '당사자B 상황 설명 입력'}
+                    value={isParticipantA ? summaryA : summaryB}
+                    onChange={e => (isParticipantA ? setSummaryA(e.target.value) : setSummaryB(e.target.value))}
+                    disabled={summaryLoading}
+                    onBlur={e => handleSaveSummary(isParticipantA ? 'A' : 'B', e.target.value)}
+                    rows={12}
+                    style={{height: '100%', minHeight: 0, maxHeight: '100%', fontSize: '1.25rem', margin: 0, padding: 0, border: 'none', background: 'transparent'}}
+                  />
+                  <div className="text-gray-400 font-mono text-base mt-2 w-full text-center" style={{margin: 0, padding: 0}}>상황설명을 입력하고 AI 요약 버튼을 눌러주세요.</div>
+                </>
+              )}
+              {/* 결과창: 내부 박스에만 렌더링 */}
+              {aiSummary && (
+                <textarea
+                  className="w-full h-full bg-transparent text-white font-mono text-xl sm:text-2xl border-none focus:outline-none resize-none"
+                  placeholder="AI 요약 결과가 여기에 표시됩니다."
+                  value={aiSummary}
+                  readOnly
+                  rows={12}
+                  style={{height: '100%', minHeight: 0, maxHeight: '100%', fontSize: '1.25rem', margin: 0, padding: 0, border: 'none', background: 'transparent'}}
+                />
+              )}
+              {/* 스피너 안내: 내부 박스에만 렌더링 (aiRequested 중 상대방 입력이 이미 들어온 경우는 제외) */}
+              {aiRequested && !aiSummary && !((isParticipantA && !summaryB.trim()) || (isParticipantB && !summaryA.trim())) && (
+                <div className="w-full h-full flex flex-col items-center justify-center" style={{margin: 0, padding: 0}}>
+                  <LoadingOverlay />
+                  <div className="text-gray-300 font-mono text-lg mt-6" style={{margin: 0, padding: 0}}>AI 요약을 생성 중입니다...</div>
+                </div>
+              )}
+              {/* 배심원: 결과 없으면 안내문구 */}
+              {isJury && !isParticipantA && !isParticipantB && !aiSummary && !aiRequested && (
+                <div className="text-gray-300 font-mono text-base w-full text-center mt-8" style={{margin: 0, padding: 0}}>AI가 요약한 상황설명 결과가 여기에 표시됩니다.</div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* AI 요약 버튼: 참가자만, 결과 없을 때만 */}
+        {(isParticipantA || isParticipantB) && !aiSummary && (
+          <>
+            <button
+              className="w-full mt-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-lg text-lg transition disabled:bg-gray-500"
+              style={{marginTop: 16}}
+              disabled={aiLoading || !(isParticipantA ? summaryA.trim() : summaryB.trim())}
+              onClick={handleAiSummaryPolling}
+            >
+              {aiLoading ? 'AI 요약 중...' : 'AI 요약'}
+            </button>
+            {/* 상대방 입력 대기 안내/로딩: 버튼 누른 뒤, 결과 나오기 전까지 계속 */}
+            {aiRequested && !aiSummary && (
+              ((isParticipantA && !summaryB.trim()) || (isParticipantB && !summaryA.trim())) && (
+                <div className="flex flex-col items-center justify-center w-full my-8">
+                  <LoadingOverlay />
+                  <div className="text-gray-300 font-mono text-lg mt-6">상대방의 상황 설명을 기다리고 있습니다...</div>
+                </div>
+              )
+            )}
+          </>
+        )}
       </div>
 
       {/* 하단: 버튼 */}
@@ -341,11 +551,11 @@ export default function WaitingRoom() {
         >
           나가기
         </button>
-        {isParticipant && (
+        {isParticipantA && (
           <button
             className="bg-green-500 hover:bg-green-600 text-black py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-green-400 hover:border-green-300 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
             onClick={() => {
-              console.log('[start-chat emit] roomId:', roomId, 'socket:', socketRef.current, 'isParticipant:', isParticipant, 'participantCount:', participantCount, 'user.id:', user.id, 'room.participants:', room?.participants);
+              console.log('[start-chat emit] roomId:', roomId, 'socket:', socketRef.current, 'isParticipant:', isParticipantA, 'participantCount:', participantCount, 'user.id:', user.id, 'room.participants:', room?.participants);
               if (socketRef.current) {
                 socketRef.current.emit('start-chat', { roomId });
               }
