@@ -312,10 +312,17 @@ export default function WaitingRoom() {
   const isOwner = user && room.createdBy && user.id === room.createdBy._id;
   const participantCount = room.participants?.length || 0;
 
-  // --- 디버깅용 로그 추가 ---
-  console.log('participants:', room.participants);
-  console.log('readyParticipants:', room.readyParticipants);
-  const allReady = room.participants && room.readyParticipants && room.participants.every(p => room.readyParticipants.map(String).includes(String(p._id || p.id)));
+  // --- 방장 제외 참가자 준비 체크 로직 ---
+  const ownerId = room.createdBy?._id || room.createdBy?.id;
+  const participantIds = room.participants
+    ? room.participants.map(p => p._id || p.id).filter(id => String(id) !== String(ownerId))
+    : [];
+  const readyIds = room.readyParticipants ? room.readyParticipants.map(String) : [];
+  const allReady = participantIds.length > 0 && participantIds.every(id => readyIds.includes(String(id)));
+  // 디버깅용 로그
+  console.log('ownerId:', ownerId);
+  console.log('participantIds:', participantIds);
+  console.log('readyIds:', readyIds);
   console.log('allReady:', allReady);
 
   return (
@@ -581,7 +588,7 @@ export default function WaitingRoom() {
         {isOwner ? (
           <button
             className="bg-green-500 hover:bg-green-600 text-black py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-green-400 hover:border-green-300 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
-            disabled={!(room.participants && room.readyParticipants && room.participants.every(p => room.readyParticipants.map(String).includes(String(p._id || p.id))))}
+            disabled={!allReady}
             onClick={async () => {
               try {
                 await fetch(`/api/chatrooms/${roomId}/start-chat`, { method: 'POST', credentials: 'include' });
