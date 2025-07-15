@@ -46,4 +46,16 @@ export const evaluateMessage = async (message) => {
 export const evaluateMessageWithGemini = async (message) => {
   const response = await api.post('/api/evaluate-gemini', { message });
   return response.data.score;
+};
+
+// 대기자 역할 변경
+export const patchChatRoomRole = async (id, userId, role) => {
+  const response = await api.patch(`/api/chatrooms/${id}/role`, { userId, role });
+  return response.data;
+};
+
+// 대기자(waiters)로 추가
+export const joinAsWaiter = async (id) => {
+  const response = await api.post(`/api/chatrooms/${id}/wait`);
+  return response.data;
 }; 
