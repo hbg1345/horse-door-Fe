@@ -51,6 +51,11 @@ const chatRoomSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'User'
   }],
+  readyParticipants: [{
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    default: []
+  }],
   // 상황설명(요약) 관련 필드 추가
   summaryA: { type: String, default: '' },
   summaryB: { type: String, default: '' },

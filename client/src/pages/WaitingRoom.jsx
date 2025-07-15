@@ -359,6 +359,9 @@ export default function WaitingRoom() {
                     }}
                   >
                     {user.nickname}
+                    {room.readyParticipants && room.readyParticipants.map(String).includes(String(user._id || user.id)) && (
+                      <span className="ml-2 text-green-500 font-bold">[준비됨]</span>
+                    )}
                   </span>
                 )) : <span className="text-gray-400 font-mono">없음</span>}
             </div>
@@ -420,6 +423,9 @@ export default function WaitingRoom() {
                     }}
                   >
                     {user.nickname}
+                    {room.readyParticipants && room.readyParticipants.map(String).includes(String(user._id || user.id)) && (
+                      <span className="ml-2 text-green-500 font-bold">[준비됨]</span>
+                    )}
                   </span>
                 ))
               ) : !isOwner ? (
@@ -551,20 +557,57 @@ export default function WaitingRoom() {
         >
           나가기
         </button>
-        {isParticipantA && (
+        {/* 준비/시작 버튼 UX 개선 */}
+        {isOwner ? (
           <button
             className="bg-green-500 hover:bg-green-600 text-black py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-green-400 hover:border-green-300 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
-            onClick={() => {
-              console.log('[start-chat emit] roomId:', roomId, 'socket:', socketRef.current, 'isParticipant:', isParticipantA, 'participantCount:', participantCount, 'user.id:', user.id, 'room.participants:', room?.participants);
-              if (socketRef.current) {
-                socketRef.current.emit('start-chat', { roomId });
+            disabled={!(room.participants && room.readyParticipants && room.participants.every(p => room.readyParticipants.map(String).includes(String(p._id || p.id))))}
+            onClick={async () => {
+              try {
+                await fetch(`/api/chatroom/chatrooms/${roomId}/start-chat`, { method: 'POST', credentials: 'include' });
+              } catch (e) {
+                alert('채팅 시작 실패: ' + (e?.response?.data?.error || e.message));
               }
             }}
           >
             채팅 시작
           </button>
-        )}
+        ) : (isParticipantA || isParticipantB) ? (
+          room.readyParticipants && room.readyParticipants.map(String).includes(String(myId)) ? (
+            <button
+              className="bg-yellow-400 hover:bg-yellow-500 text-black py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-yellow-300 hover:border-yellow-200 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
+              onClick={async () => {
+                try {
+                  await fetch(`/api/chatroom/chatrooms/${roomId}/unready`, { method: 'POST', credentials: 'include' });
+                  await fetchRoom();
+                } catch (e) {
+                  alert('준비 해제 실패: ' + (e?.response?.data?.error || e.message));
+                }
+              }}
+            >
+              준비됨 (해제)
+            </button>
+          ) : (
+            <button
+              className="bg-blue-500 hover:bg-blue-600 text-white py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-blue-400 hover:border-blue-300 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300 shadow"
+              onClick={async () => {
+                try {
+                  await fetch(`/api/chatroom/chatrooms/${roomId}/ready`, { method: 'POST', credentials: 'include' });
+                  await fetchRoom();
+                } catch (e) {
+                  alert('준비 실패: ' + (e?.response?.data?.error || e.message));
+                }
+              }}
+            >
+              준비
+            </button>
+          )
+        ) : null}
       </div>
+      {/* 안내 메시지 */}
+      {isOwner && room.participants && room.readyParticipants && !room.participants.every(p => room.readyParticipants.map(String).includes(String(p._id || p.id))) && (
+        <div className="text-center text-yellow-300 font-mono text-lg mt-2">참가자가 모두 준비되면 채팅을 시작할 수 있습니다.</div>
+      )}
     </div>
   );
 } 
