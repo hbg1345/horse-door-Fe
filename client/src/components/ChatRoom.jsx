@@ -262,6 +262,23 @@ export default function ChatRoom({ chatRoom, onBack }) {
   }
   const userRole = getUserRole(chatRoom, user);
 
+  // 점수 총합 및 색상 계산 함수
+  function getScoreSum(score) {
+    if (!score) return 0;
+    return Object.values(score).reduce((a, b) => a + b, 0);
+  }
+  function getScoreColor(sum) {
+    // 0~8: 빨강, 9~14: 주황~노랑, 15~20: 파랑
+    if (sum <= 8) return 'border-red-500';
+    if (sum <= 14) return 'border-yellow-400';
+    return 'border-blue-500';
+  }
+  // 메시지별 점수 펼침 상태
+  const [openScoreIds, setOpenScoreIds] = useState({});
+  const toggleScore = (id) => {
+    setOpenScoreIds(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
   return (
     <div className="w-full h-screen bg-black flex flex-row">
       {/* 메인 채팅창 */}
@@ -294,36 +311,60 @@ export default function ChatRoom({ chatRoom, onBack }) {
 
         {/* 메시지 영역 */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.userId === user.id ? 'justify-end' : 'justify-start'}`}
-            >
+          {messages.map((message) => {
+            const isMine = message.userId === user.id;
+            const hasScore = !!message.score;
+            const scoreSum = hasScore ? getScoreSum(message.score) : 0;
+            const borderColor = hasScore ? getScoreColor(scoreSum) : '';
+            return (
               <div
-                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                  message.type === 'system'
-                    ? 'bg-gray-700 text-gray-300 text-center mx-auto text-sm'
-                    : message.userId === user.id
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-700 text-gray-300'
-                }`}
+                key={message.id}
+                className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
               >
-                {message.type !== 'system' && (
-                  <div className="text-xs opacity-75 mb-1">{message.nickname}</div>
-                )}
-                <div className="font-mono">{message.message}</div>
-                {/* 평균 점수만 표시 */}
-                {message.score && (
-                  <div className="text-xs text-green-400 mt-1 font-mono">
-                    {JSON.stringify(message.score)}
+                <div
+                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg relative ${
+                    message.type === 'system'
+                      ? 'bg-gray-700 text-gray-300 text-center mx-auto text-sm'
+                      : isMine
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-700 text-gray-300'
+                  } ${hasScore ? 'border-2 ' + borderColor : ''}`}
+                >
+                  {message.type !== 'system' && (
+                    <div className="text-xs opacity-75 mb-1 flex items-center gap-1">
+                      {message.nickname}
+                    </div>
+                  )}
+                  <div className="font-mono">{message.message}</div>
+                  <div className="flex items-center gap-1 mt-1">
+                    <div className="text-xs opacity-75">
+                      {formatTime(message.timestamp)}
+                    </div>
+                    {hasScore && (
+                      <button
+                        onClick={() => toggleScore(message.id)}
+                        className={`ml-1 text-xs focus:outline-none ${isMine ? 'text-black' : 'text-white'} hover:opacity-80`}
+                        title="점수 보기"
+                      >
+                        ▼
+                      </button>
+                    )}
                   </div>
-                )}
-                <div className="text-xs opacity-75 mt-1">
-                  {formatTime(message.timestamp)}
+                  {/* 점수: 펼침 상태일 때만 표시 */}
+                  {hasScore && openScoreIds[message.id] && (
+                    <div className="text-xs mt-2 font-mono border-t border-gray-600 pt-1">
+                      <div className="flex gap-2 items-center">
+                        <span className="font-bold">총점: <span className="text-lg" style={{color: scoreSum >= 15 ? '#3b82f6' : scoreSum <= 8 ? '#ef4444' : '#f59e42'}}>{scoreSum}</span></span>
+                        <span className="text-blue-700 font-bold">(
+                          {Object.entries(message.score).map(([k, v]) => `${k}:${v}`).join(', ')}
+                        )</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           
           {/* 타이핑 표시 */}
           {typingUsers.length > 0 && (
