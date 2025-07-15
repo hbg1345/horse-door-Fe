@@ -115,6 +115,19 @@ export default function WaitingRoom() {
     // eslint-disable-next-line
   }, [user, roomId, room]);
 
+  useEffect(() => {
+    if (!socketRef.current) return;
+    const handleStartChat = () => {
+      console.log('[start-chat] 이벤트 수신!');
+      console.log('[start-chat] navigate 호출:', `/dashboard`, { state: { enterRoomId: roomId } });
+      navigate(`/dashboard`, { state: { enterRoomId: roomId } });
+    };
+    socketRef.current.on('start-chat', handleStartChat);
+    return () => {
+      socketRef.current.off('start-chat', handleStartChat);
+    };
+  }, [roomId, navigate]);
+
   const handleJuryToParticipant = async (juryId) => {
     setRoleChangeLoading(juryId + 'participant');
     try {
@@ -297,6 +310,7 @@ export default function WaitingRoom() {
           <button
             className="bg-green-500 hover:bg-green-600 text-black py-3 px-8 rounded-lg font-bold font-mono text-lg border-2 border-green-400 hover:border-green-300 disabled:bg-gray-400 disabled:text-gray-600 disabled:border-gray-300"
             onClick={() => {
+              console.log('[start-chat emit] roomId:', roomId, 'socket:', socketRef.current, 'isParticipant:', isParticipant, 'participantCount:', participantCount, 'user.id:', user.id, 'room.participants:', room?.participants);
               if (socketRef.current) {
                 socketRef.current.emit('start-chat', { roomId });
               }
