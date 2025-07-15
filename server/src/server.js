@@ -5,6 +5,7 @@ const app = require('./app');
 const { PORT } = require('./config/env');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const ChatRoom = require('./models/ChatRoom');
 
 const server = createServer(app);
 const io = new Server(server, {
@@ -51,6 +52,29 @@ io.on('connection', (socket) => {
   // 타이핑 상태
   socket.on('typing', ({ roomId, nickname, isTyping }) => {
     socket.to(roomId).emit('user-typing', { nickname, isTyping });
+  });
+
+  // 관전 전용 채팅 메시지 전송
+  socket.on('send-spectator-message', async ({ roomId, userId, nickname, message }) => {
+    console.log(`[send-spectator-message] roomId: ${roomId}, userId: ${userId}, nickname: ${nickname}, message: ${message}`);
+    const spectatorMessage = {
+      userId,
+      nickname,
+      message,
+      timestamp: new Date()
+    };
+    // DB에 저장
+    try {
+      await ChatRoom.findByIdAndUpdate(
+        roomId,
+        { $push: { spectatorMessages: spectatorMessage } },
+        { new: true }
+      );
+      // 해당 방에 브로드캐스트
+      io.to(roomId).emit('new-spectator-message', spectatorMessage);
+    } catch (err) {
+      console.error('관전채팅 저장 실패:', err);
+    }
   });
 
   // 연결 해제

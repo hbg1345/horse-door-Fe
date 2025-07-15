@@ -208,36 +208,43 @@ router.post('/chatrooms', async (req, res) => {
   }
 });
 
-// 채팅방 참여
+// 채팅방 참여 (참가자/배심원)
 router.post('/chatrooms/:id/join', async (req, res) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: '로그인이 필요합니다' });
     }
-
+    const { role } = req.body; // 'participant' | 'jury'
+    if (!['participant', 'jury'].includes(role)) {
+      return res.status(400).json({ error: 'role이 필요합니다' });
+    }
     const chatRoom = await ChatRoom.findById(req.params.id);
     if (!chatRoom) {
       return res.status(404).json({ error: '채팅방을 찾을 수 없습니다' });
     }
-
     // 이미 참여 중인지 확인
-    if (chatRoom.participants.includes(req.user.id)) {
-      return res.status(400).json({ error: '이미 참여 중인 채팅방입니다' });
+    if (role === 'participant' && chatRoom.participants.includes(req.user.id)) {
+      return res.status(400).json({ error: '이미 참가자로 참여 중인 채팅방입니다' });
     }
-
-    // 최대 인원 확인
-    if (chatRoom.currentParticipants >= chatRoom.maxParticipants) {
+    if (role === 'jury' && chatRoom.jury && chatRoom.jury.includes(req.user.id)) {
+      return res.status(400).json({ error: '이미 배심원으로 참여 중인 채팅방입니다' });
+    }
+    // 최대 인원 확인 (참가자만)
+    if (role === 'participant' && chatRoom.currentParticipants >= chatRoom.maxParticipants) {
       return res.status(400).json({ error: '채팅방이 가득 찼습니다' });
     }
-
-    chatRoom.participants.push(req.user.id);
-    chatRoom.currentParticipants += 1;
+    if (role === 'participant') {
+      chatRoom.participants.push(req.user.id);
+      chatRoom.currentParticipants += 1;
+    } else if (role === 'jury') {
+      if (!chatRoom.jury) chatRoom.jury = [];
+      chatRoom.jury.push(req.user.id);
+    }
     await chatRoom.save();
-
     const updatedChatRoom = await ChatRoom.findById(chatRoom._id)
       .populate('createdBy', 'nickname')
-      .populate('participants', 'nickname');
-
+      .populate('participants', 'nickname')
+      .populate('jury', 'nickname');
     res.json(updatedChatRoom);
   } catch (error) {
     console.error('채팅방 참여 에러:', error);

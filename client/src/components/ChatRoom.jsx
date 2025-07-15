@@ -3,6 +3,90 @@ import { io } from 'socket.io-client';
 import { useAuth } from '../contexts/AuthContext';
 import { evaluateMessage, evaluateMessageWithGemini } from '../lib/chatroomApi';
 
+// 관전 전용 채팅 컴포넌트
+function SpectatorChatRoom({ chatRoom, user, userRole }) {
+  const [messages, setMessages] = useState(chatRoom.spectatorMessages || []);
+  const [newMessage, setNewMessage] = useState('');
+  const [socket, setSocket] = useState(null);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    setMessages(chatRoom.spectatorMessages || []);
+  }, [chatRoom.spectatorMessages]);
+
+  useEffect(() => {
+    if (!chatRoom || !user) return;
+    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
+      withCredentials: true
+    });
+    newSocket.on('connect', () => {
+      newSocket.emit('join-room', {
+        roomId: chatRoom._id,
+        userId: user.id,
+        nickname: user.nickname
+      });
+    });
+    newSocket.on('new-spectator-message', (msg) => {
+      setMessages(prev => [...prev, msg]);
+    });
+    setSocket(newSocket);
+    return () => newSocket.disconnect();
+  }, [chatRoom, user]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSend = (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !socket) return;
+    socket.emit('send-spectator-message', {
+      roomId: chatRoom._id,
+      userId: user.id,
+      nickname: user.nickname,
+      message: newMessage.trim()
+    });
+    setNewMessage('');
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-gray-900 border-l border-gray-700 w-80 min-w-64">
+      <div className="p-2 border-b border-green-400 text-green-400 font-bold text-center font-mono">관전 전용 채팅</div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {messages.map((msg, idx) => (
+          <div key={idx} className="bg-gray-800 rounded-md px-3 py-2 text-sm text-gray-200">
+            <span className="font-bold text-green-400">{msg.nickname}</span>: {msg.message}
+            <div className="text-xs text-gray-500 text-right">{new Date(msg.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+      <div className="p-2 border-t border-green-400">
+        {userRole === 'participant' ? (
+          <div className="text-center text-gray-400 text-sm">참가자는 관전채팅에 참여할 수 없습니다.</div>
+        ) : (
+          <form onSubmit={handleSend} className="flex gap-2">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={e => setNewMessage(e.target.value)}
+              placeholder="관전채팅 입력..."
+              className="flex-1 bg-gray-800 border border-green-400 text-green-400 rounded-md px-3 py-2 focus:outline-none font-mono"
+            />
+            <button
+              type="submit"
+              disabled={!newMessage.trim()}
+              className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-black px-4 py-2 rounded-md font-mono font-bold border-2 border-green-400 hover:border-green-300"
+            >
+              전송
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ChatRoom({ chatRoom, onBack }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
@@ -169,86 +253,107 @@ export default function ChatRoom({ chatRoom, onBack }) {
     });
   };
 
-  return (
-    <div className="w-full h-screen bg-black flex flex-col">
-      {/* 채팅방 헤더 */}
-      <div className="bg-gray-900 p-4 border-b border-green-400 flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold text-green-400 font-mono">{chatRoom.title}</h2>
-          <p className="text-gray-300 font-mono text-sm">
-            {chatRoom.currentParticipants}/{chatRoom.maxParticipants}명
-          </p>
-        </div>
-        <button
-          onClick={onBack}
-          className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-gray-500 hover:border-gray-400"
-        >
-          뒤로 가기
-        </button>
-      </div>
+  // 역할 판별 함수 (viewer 완전 제거, 참가자 아니면 모두 jury)
+  function getUserRole(chatRoom, user) {
+    if (!chatRoom || !user) return null;
+    if (chatRoom.participants && chatRoom.participants.some(u => (u._id || u.id) === (user._id || user.id))) {
+      return 'participant';
+    }
+    return 'jury';
+  }
+  const userRole = getUserRole(chatRoom, user);
 
-      {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.userId === user.id ? 'justify-end' : 'justify-start'}`}
+  return (
+    <div className="w-full h-screen bg-black flex flex-row">
+      {/* 메인 채팅창 */}
+      <div className="flex-1 flex flex-col">
+        {/* 채팅방 헤더 */}
+        <div className="bg-gray-900 p-4 border-b border-green-400 flex justify-between items-center">
+          <div>
+            <h2 className="text-xl font-bold text-green-400 font-mono">{chatRoom.title}</h2>
+            <p className="text-gray-300 font-mono text-sm">
+              {chatRoom.currentParticipants}/{chatRoom.maxParticipants}명
+            </p>
+          </div>
+          <button
+            onClick={onBack}
+            className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-gray-500 hover:border-gray-400"
           >
+            뒤로 가기
+          </button>
+        </div>
+
+        {/* 메시지 영역 */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {messages.map((message) => (
             <div
-              className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                message.type === 'system'
-                  ? 'bg-gray-700 text-gray-300 text-center mx-auto text-sm'
-                  : message.userId === user.id
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-700 text-gray-300'
-              }`}
+              key={message.id}
+              className={`flex ${message.userId === user.id ? 'justify-end' : 'justify-start'}`}
             >
-              {message.type !== 'system' && (
-                <div className="text-xs opacity-75 mb-1">{message.nickname}</div>
-              )}
-              <div className="font-mono">{message.message}</div>
-              {/* 평균 점수만 표시 */}
-              {message.score && (
-                <div className="text-xs text-green-400 mt-1 font-mono">
-                  {JSON.stringify(message.score)}
+              <div
+                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                  message.type === 'system'
+                    ? 'bg-gray-700 text-gray-300 text-center mx-auto text-sm'
+                    : message.userId === user.id
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-300'
+                }`}
+              >
+                {message.type !== 'system' && (
+                  <div className="text-xs opacity-75 mb-1">{message.nickname}</div>
+                )}
+                <div className="font-mono">{message.message}</div>
+                {/* 평균 점수만 표시 */}
+                {message.score && (
+                  <div className="text-xs text-green-400 mt-1 font-mono">
+                    {JSON.stringify(message.score)}
+                  </div>
+                )}
+                <div className="text-xs opacity-75 mt-1">
+                  {formatTime(message.timestamp)}
                 </div>
-              )}
-              <div className="text-xs opacity-75 mt-1">
-                {formatTime(message.timestamp)}
               </div>
             </div>
-          </div>
-        ))}
-        
-        {/* 타이핑 표시 */}
-        {typingUsers.length > 0 && (
-          <div className="text-gray-400 text-sm font-mono italic">
-            {typingUsers.join(', ')}님이 타이핑 중...
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
-      </div>
+          ))}
+          
+          {/* 타이핑 표시 */}
+          {typingUsers.length > 0 && (
+            <div className="text-gray-400 text-sm font-mono italic">
+              {typingUsers.join(', ')}님이 타이핑 중...
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
 
-      {/* 메시지 입력 */}
-      <div className="bg-gray-900 p-4 border-t border-green-400">
-        <form onSubmit={handleSendMessage} className="flex gap-2">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={handleTyping}
-            placeholder="메시지를 입력하세요..."
-            className="flex-1 bg-gray-800 border border-green-400 text-green-400 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent font-mono"
-          />
-          <button
-            type="submit"
-            disabled={!newMessage.trim()}
-            className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-black py-3 px-6 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-green-400 hover:border-green-300"
-          >
-            전송
-          </button>
-        </form>
+        {/* 메시지 입력 */}
+        <div className="bg-gray-900 p-4 border-t border-green-400">
+          {userRole === 'participant' ? (
+            <form onSubmit={handleSendMessage} className="flex gap-2">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={handleTyping}
+                placeholder="메시지를 입력하세요..."
+                className="flex-1 bg-gray-800 border border-green-400 text-green-400 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent font-mono"
+              />
+              <button
+                type="submit"
+                disabled={!newMessage.trim()}
+                className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-black py-3 px-6 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-green-400 hover:border-green-300"
+              >
+                전송
+              </button>
+            </form>
+          ) : (
+            <div className="text-center text-gray-400 font-mono py-2">
+              배심원은 채팅 입력이 불가합니다. (관전만 가능)
+            </div>
+          )}
+        </div>
       </div>
+      {/* 관전 전용 채팅창 */}
+      <SpectatorChatRoom chatRoom={chatRoom} user={user} userRole={userRole} />
     </div>
   );
 } 

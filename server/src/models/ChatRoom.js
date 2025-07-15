@@ -43,6 +43,18 @@ const chatRoomSchema = new Schema({
     type: Schema.Types.ObjectId, 
     ref: 'User' 
   }],
+  jury: [{
+    type: Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  spectatorMessages: [
+    {
+      userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+      nickname: { type: String, required: true },
+      message: { type: String, required: true },
+      timestamp: { type: Date, default: Date.now }
+    }
+  ],
   createdAt: { 
     type: Date, 
     default: Date.now 
