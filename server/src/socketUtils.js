@@ -17,8 +17,13 @@ function broadcastChatRoomListUpdate() {
   }
 }
 
+function getIO() {
+  return ioInstance;
+}
+
 module.exports = {
   setSocketIO,
+  getIO,
   broadcastWaitingRoomUpdate,
   broadcastChatRoomListUpdate
 }; 

@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const ChatRoom = require('../models/ChatRoom');
 const axios = require('axios');
-const { broadcastWaitingRoomUpdate, broadcastChatRoomListUpdate } = require('../socketUtils');
+const { broadcastWaitingRoomUpdate, broadcastChatRoomListUpdate, getIO } = require('../socketUtils');
 
 const router = Router();
 const aiSummaryGenerating = new Set();
@@ -696,6 +696,11 @@ router.post('/chatrooms/:id/start-chat', async (req, res) => {
     chatRoom.readyParticipants = [];
     await chatRoom.save();
     broadcastWaitingRoomUpdate(chatRoom._id.toString());
+    // --- start-chat 소켓 이벤트 emit ---
+    const io = getIO();
+    if (io) {
+      io.to(chatRoom._id.toString()).emit('start-chat');
+    }
     res.json({ message: '채팅이 시작되었습니다' });
   } catch (error) {
     res.status(500).json({ error: '채팅 시작 실패' });
