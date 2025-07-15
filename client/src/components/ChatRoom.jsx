@@ -303,30 +303,36 @@ export default function ChatRoom({ chatRoom, onBack }) {
   const timerRef = useRef();
   const timerStartRef = useRef();
 
-  // 타이머 시작/리셋 로직 (Date.now() 기반)
+  // 턴/타이머 상태
+  const [currentTurnUserId, setCurrentTurnUserId] = useState(null);
+  const [turnTimer, setTurnTimer] = useState(10);
+
   useEffect(() => {
-    if (inputDisabled) return;
-    setTimeLeft(CHAT_TIME_LIMIT);
-    timerStartRef.current = Date.now();
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      const elapsed = (Date.now() - timerStartRef.current) / 1000;
-      const left = +(CHAT_TIME_LIMIT - elapsed).toFixed(3);
-      if (left <= 0) {
-        clearInterval(timerRef.current);
-        setTimeLeft(0);
-        setInputDisabled(true);
-        setTimeout(() => {
-          alert('패배하였습니다');
-        }, 100);
-      } else {
-        setTimeLeft(left);
-      }
-    }, 30);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+    if (!socket) return;
+    // 턴 변경
+    const handleTurnChanged = ({ currentTurnUserId }) => {
+      setCurrentTurnUserId(currentTurnUserId);
     };
-  }, [inputDisabled]);
+    // 타이머 동기화
+    const handleTurnTimer = ({ timeLeft }) => {
+      setTurnTimer(timeLeft);
+    };
+    // 패배 처리
+    const handleTurnTimeout = ({ loserUserId }) => {
+      if (user.id === loserUserId) {
+        setInputDisabled(true);
+        alert('패배하였습니다');
+      }
+    };
+    socket.on('turn-changed', handleTurnChanged);
+    socket.on('turn-timer', handleTurnTimer);
+    socket.on('turn-timeout', handleTurnTimeout);
+    return () => {
+      socket.off('turn-changed', handleTurnChanged);
+      socket.off('turn-timer', handleTurnTimer);
+      socket.off('turn-timeout', handleTurnTimeout);
+    };
+  }, [socket, user.id]);
 
   // 나가기 버튼 핸들러
   const handleLeaveRoom = () => {
@@ -504,10 +510,10 @@ export default function ChatRoom({ chatRoom, onBack }) {
           {/* 타이머 (항상 중앙) + 점수차 */}
           <div className="flex-shrink-0 flex flex-col items-center pointer-events-auto" style={{ minWidth: 160 }}>
             <div className="bg-black bg-opacity-80 px-6 py-2 rounded-full border-2 border-green-400 text-2xl font-mono text-green-300 font-bold shadow-lg">
-              {timeLeft >= 1
-                ? Math.ceil(timeLeft) + '초'
-                : timeLeft > 0
-                  ? timeLeft.toFixed(3) + '초'
+              {turnTimer >= 1
+                ? Math.ceil(turnTimer) + '초'
+                : turnTimer > 0
+                  ? turnTimer.toFixed(3) + '초'
                   : '0초'}
             </div>
             {/* 점수차 표시 */}
@@ -576,11 +582,11 @@ export default function ChatRoom({ chatRoom, onBack }) {
                 onChange={handleTyping}
                 placeholder="메시지를 입력하세요..."
                 className="flex-1 bg-gray-800 border border-green-400 text-green-400 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent font-mono"
-                disabled={inputDisabled}
+                disabled={inputDisabled || user.id !== currentTurnUserId}
               />
               <button
                 type="submit"
-                disabled={!newMessage.trim() || inputDisabled}
+                disabled={!newMessage.trim() || inputDisabled || user.id !== currentTurnUserId}
                 className="bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-black py-3 px-6 rounded-lg transition-all duration-200 font-mono font-bold border-2 border-green-400 hover:border-green-300"
               >
                 전송
