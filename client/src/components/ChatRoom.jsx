@@ -186,6 +186,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
     if (!newMessage.trim() || !socket || inputDisabled) return;
     // 타이머 즉시 리셋 (사용자가 메시지를 입력하자마자)
     setTimeLeft(CHAT_TIME_LIMIT);
+    timerStartRef.current = Date.now(); 
     setInputDisabled(false);
     // 임시 메시지 id
     const tempId = Date.now() + Math.random();
