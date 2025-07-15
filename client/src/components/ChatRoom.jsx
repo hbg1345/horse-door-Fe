@@ -329,7 +329,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
   return (
     <div className="w-full h-screen bg-black flex flex-row">
       {/* 메인 채팅창 */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col relative"> {/* ← relative 추가 */}
         {/* 채팅방 헤더 */}
         <div className="bg-gray-900 p-4 border-b border-green-400 flex justify-between items-center">
           <div>
