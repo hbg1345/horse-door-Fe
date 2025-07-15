@@ -592,6 +592,10 @@ router.post('/chatrooms/:id/ai-summary', async (req, res) => {
   try {
     const chatRoom = await ChatRoom.findById(req.params.id);
     if (!chatRoom) return res.status(404).json({ error: '채팅방을 찾을 수 없습니다.' });
+    if (chatRoom.aiSummary) {
+      // 이미 요약이 있으면 바로 반환
+      return res.json({ aiSummary: chatRoom.aiSummary });
+    }
     const { summaryA, summaryB } = chatRoom;
     if (!summaryA || !summaryB) return res.status(400).json({ error: '두 당사자의 상황설명이 모두 필요합니다.' });
     const prompt = `아래는 두 참가자의 자기소개/입장/상황입니다.\n- 참가자A: ${summaryA}\n- 참가자B: ${summaryB}\n이 상황을 객관적으로 요약해 주세요. 반드시 반드시 반드시 반드시 아래 예시처럼 JSON만 출력하세요.\n\n예시:\n{\n  "쟁점": "...",\n  "공통점": "...",\n  "차이점": "...",\n  "논점": "...",\n  "대립되는 부분": "..."\n}`;
