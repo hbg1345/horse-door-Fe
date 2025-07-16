@@ -109,6 +109,7 @@ export default function WaitingRoom() {
   const [pledgeText, setPledgeText] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [showGeakseoModal, setShowGeakseoModal] = useState(false);
+  const [kicked, setKicked] = useState(false);
 
   async function fetchSummary() {
     setSummaryLoading(true);
@@ -150,6 +151,21 @@ export default function WaitingRoom() {
       setLoading(true);
       const data = await getChatRoom(roomId);
       setRoom(data);
+
+      // 강퇴 또는 제외된 경우 자동으로 대기룸 나가기
+      const myId = user?.id;
+      const isStillInRoom =
+        (data.participants && data.participants.some(u => u._id === myId || u.id === myId)) ||
+        (data.jury && data.jury.some(u => u._id === myId || u.id === myId)) ||
+        (data.createdBy && (data.createdBy._id === myId || data.createdBy.id === myId));
+      if (!isStillInRoom) {
+        setKicked(true);
+        setTimeout(() => {
+          setKicked(false);
+          navigate('/dashboard');
+        }, 1500);
+        return;
+      }
     } catch (e) {
       setError('채팅방 정보를 불러오지 못했습니다.');
     } finally {
@@ -483,10 +499,23 @@ export default function WaitingRoom() {
                   color: '#222',
                   border: '2px solid #64748b',
                   boxShadow: '0 2px 8px 0 #0f172a33',
-                  fontWeight: 700
+                  fontWeight: 700,
+                  position: 'relative'
                 }}
               >
                 {user.nickname}
+                {/* 방장만 볼 수 있는 배심원 강퇴(x) 버튼 */}
+                {isOwner && (
+                  <button
+                    className="ml-2 px-2 py-1 bg-transparent hover:bg-red-200 text-red-600 rounded text-base font-mono border-none disabled:text-gray-400"
+                    style={{marginLeft:8, fontWeight:'bold', lineHeight:'1'}}
+                    disabled={roleChangeLoading === (user._id || user.id) + 'kick'}
+                    onClick={() => handleJuryKick(user._id || user.id)}
+                    title="배심원 강퇴"
+                  >
+                    {roleChangeLoading === (user._id || user.id) + 'kick' ? '⏳' : '×'}
+                  </button>
+                )}
               </span>
             )) : <span className="text-gray-400 font-mono text-center w-full">배심원이 없습니다. 우측 상단 초대 버튼을 누르고 url을 공유해보세요!</span>}
           </div>
@@ -721,6 +750,45 @@ export default function WaitingRoom() {
       {/* 안내 메시지 */}
       {isOwner && room.participants && room.readyParticipants && !room.participants.every(p => room.readyParticipants.map(String).includes(String(p._id || p.id))) && (
         <div className="text-center text-yellow-300 font-mono text-lg mt-2">참가자가 모두 준비되면 채팅을 시작할 수 있습니다.</div>
+      )}
+      {/* 안내문구 박스 렌더링 */}
+      {kicked && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(16,23,38,0.75)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <div
+            className="flex flex-col items-center justify-center"
+            style={{
+              background: 'linear-gradient(120deg, #232946 80%, #6366f1 100%)',
+              color: '#fff',
+              padding: '44px 36px',
+              borderRadius: 20,
+              boxShadow: '0 6px 32px #000a',
+              fontSize: 22,
+              fontWeight: 700,
+              fontFamily: 'monospace',
+              textAlign: 'center',
+              border: '3px solid #6366f1',
+              minWidth: 320,
+              maxWidth: '90vw',
+              letterSpacing: '-0.5px',
+            }}
+          >
+            <span style={{fontSize:36, color:'#f87171', marginBottom:16, display:'block'}}>
+              🚫 강퇴되었습니다
+            </span>
+            <span style={{fontSize:20, color:'#a5b4fc'}}>방에서 제외되어 대기실로 이동합니다.</span>
+          </div>
+        </div>
       )}
     </div>
   );
