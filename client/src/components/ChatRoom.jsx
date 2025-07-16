@@ -452,7 +452,11 @@ export default function ChatRoom({ chatRoom, onBack }) {
       setRematchNotice(true);
       setFinalResult(null);
       setJuryVote(null);
-      setGameResult(null); // 1차 승자 안내 닫기
+      setGameResult(null);
+      setMessages([]); // 메시지 초기화
+      setOpenScoreIds({});
+      setOpenScoreDetail({});
+      // 필요하다면 점수/타이머 등 추가 상태도 초기화
       setTimeout(() => setRematchNotice(false), 2000);
     };
     socket.on('final-winner', handleFinalWinner);

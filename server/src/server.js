@@ -92,7 +92,14 @@ async function startJuryVote(roomId, winnerUserId, loserUserId) {
             // 1차/2차 승자가 다르면 재경기
             chatRoom.isRematch = true;
             chatRoom.round = 2;
+            // === 여기서 상태 초기화 ===
+            chatRoom.spectatorMessages = [];
             await chatRoom.save();
+            if (turnStateMap.has(roomId)) {
+              turnStateMap.get(roomId).messages = [];
+              // 점수 등 추가 상태가 있다면 여기도 초기화
+            }
+            // ========================
             io.to(roomId).emit('rematch-start', {
               round: 2
             });
