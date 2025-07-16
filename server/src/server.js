@@ -103,6 +103,31 @@ async function startJuryVote(roomId, winnerUserId, loserUserId) {
             io.to(roomId).emit('rematch-start', {
               round: 2
             });
+            // === 재경기 직후 턴/타이머 명확히 초기화 ===
+            if (turnStateMap.has(roomId)) {
+              const state = turnStateMap.get(roomId);
+              // 방장 또는 첫 참가자 userId로 턴 지정
+              const chatRoomReloaded = await ChatRoom.findById(roomId).populate('createdBy').populate('participants');
+              let ownerId = chatRoomReloaded.createdBy._id.toString();
+              if (chatRoomReloaded.participants.length > 0) {
+                ownerId = chatRoomReloaded.participants[0]._id.toString();
+              }
+              state.currentTurnUserId = ownerId;
+              state.timer = 10;
+              if (state.timerRef) clearInterval(state.timerRef);
+              state.timerRef = setInterval(() => {
+                state.timer -= 0.03;
+                if (state.timer <= 0) {
+                  clearInterval(state.timerRef);
+                  io.to(roomId).emit('turn-timeout', { loserUserId: String(state.currentTurnUserId) });
+                } else {
+                  io.to(roomId).emit('turn-timer', { timeLeft: Math.max(0, +state.timer.toFixed(3)), currentTurnUserId: String(state.currentTurnUserId) });
+                }
+              }, 30);
+              io.to(roomId).emit('turn-changed', { currentTurnUserId: String(state.currentTurnUserId) });
+              io.to(roomId).emit('turn-timer', { timeLeft: state.timer, currentTurnUserId: String(state.currentTurnUserId) });
+            }
+            // =========================================
           }
         }
       });

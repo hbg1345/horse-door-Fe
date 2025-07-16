@@ -213,11 +213,18 @@ export default function ChatRoom({ chatRoom, onBack }) {
       nickname: user.nickname,
       isTyping: false
     });
-    // 2. 점수 평가 비동기 요청
+    // 2. 프롬프트: 지금까지의 A, B 채팅 내역 + 이번 메시지
+    const abUserIds = chatRoom.participants.map(u => u._id || u.id);
+    const abMessages = messages
+      .filter(m => abUserIds.includes(m.userId))
+      .map(m => `${chatRoom.participants.find(u => (u._id||u.id) === m.userId)?.nickname || m.userId}: ${m.message}`)
+      .join('\n');
+    const prompt = `[지금까지의 대화 내역]\n${abMessages}\n\n[이번 메시지]\n${user.nickname}: ${newMessage.trim()}\n`;
+    // 3. 점수 평가 비동기 요청
     try {
       const results = await Promise.allSettled([
-        evaluateMessage(newMessage.trim()),
-        evaluateMessageWithGemini(newMessage.trim())
+        evaluateMessage(prompt),
+        evaluateMessageWithGemini(prompt)
       ]);
       let perplexityScore = results[0].value;
       let geminiScore = results[1].status === 'fulfilled' ? results[1].value : null;
@@ -232,7 +239,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
       } else {
         avgScore = perplexityScore;
       }
-      // 3. 점수 받아오면 서버에 update-score로 알림
+      // 4. 점수 받아오면 서버에 update-score로 알림
       socket.emit('update-score', { id: tempId, roomId: chatRoom._id, score: avgScore });
     } catch (err) {
       console.error('메시지 평가 실패:', err);
@@ -456,7 +463,10 @@ export default function ChatRoom({ chatRoom, onBack }) {
       setMessages([]); // 메시지 초기화
       setOpenScoreIds({});
       setOpenScoreDetail({});
-      // 필요하다면 점수/타이머 등 추가 상태도 초기화
+      setInputDisabled(false);
+      setTurnTimer(10);
+      setTimeLeft(10);
+      // currentTurnUserId는 서버에서 turn-changed emit 오면 자동 세팅됨
       setTimeout(() => setRematchNotice(false), 2000);
     };
     socket.on('final-winner', handleFinalWinner);
