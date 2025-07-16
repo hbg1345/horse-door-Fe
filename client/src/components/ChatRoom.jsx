@@ -767,6 +767,32 @@ export default function ChatRoom({ chatRoom, onBack }) {
             <div className="mb-2 text-gray-700 font-mono">
               종료 사유: {gameResult.reason === 'timeout' ? '제한시간 초과' : '점수차 100점 이상'}
             </div>
+            {/* 배심원 투표 UI */}
+            {juryVote && userRole === 'jury' && (
+              <div className="mt-6 w-full flex flex-col items-center">
+                <div className="font-mono font-bold text-purple-700 mb-2">2차(배심원) 승자 투표</div>
+                <div className="flex gap-4">
+                  {juryVote.participants.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => handleJuryVote(p.id)}
+                      disabled={!!myJuryVote}
+                      className={`px-4 py-2 rounded font-mono font-bold border-2 ${
+                        myJuryVote === p.id
+                          ? 'bg-purple-500 text-white border-purple-700'
+                          : 'bg-gray-200 text-gray-700 border-gray-400 hover:bg-purple-100'
+                      }`}
+                    >
+                      {p.nickname}
+                    </button>
+                  ))}
+                </div>
+                {myJuryVote && (
+                  <div className="mt-2 text-green-600 font-mono font-bold">투표 완료!</div>
+                )}
+                <div className="mt-2 text-gray-500 font-mono text-sm">남은 시간: {juryVote.timeLeft}초</div>
+              </div>
+            )}
             <button
               className="mt-4 px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded font-bold font-mono"
               onClick={() => setGameResult(null)}
