@@ -167,9 +167,18 @@ io.on('connection', (socket) => {
       return;
     }
     // 참가자 목록에서 상대방 userId 찾기
-    ChatRoom.findById(msg.roomId).populate('participants').then(chatRoom => {
-      if (!chatRoom) return;
-      const users = chatRoom.participants.map(u => u._id.toString());
+    ChatRoom.findById(msg.roomId).populate('participants').then(async chatRoom2 => {
+      if (!chatRoom2) {
+        console.log('[ERROR] ChatRoom not found', msg.roomId);
+        // fallback: 최소한 game-ended emit은 보장
+        io.to(msg.roomId).emit('game-ended', {
+          winnerUserId: String(state.currentTurnUserId),
+          loserUserId: String(state.currentTurnUserId),
+          reason: 'timeout'
+        });
+        return;
+      }
+      const users = chatRoom2.participants.map(u => u._id.toString());
       // --- 참가자 2명 체크 제거 ---
       // 메시지 전송
       io.to(msg.roomId).emit('new-message', msg);
@@ -239,9 +248,18 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('update-score', { id, score });
     // --- 게임 종료: 점수차 100점 이상 즉시 승패 ---
     // 참가자별 총점 계산
-    ChatRoom.findById(roomId).populate('participants').then(chatRoom => {
-      if (!chatRoom) return;
-      const users = chatRoom.participants.map(u => u._id.toString());
+    ChatRoom.findById(roomId).populate('participants').then(async chatRoom2 => {
+      if (!chatRoom2) {
+        console.log('[ERROR] ChatRoom not found', roomId);
+        // fallback: 최소한 game-ended emit은 보장
+        io.to(roomId).emit('game-ended', {
+          winnerUserId: users[0],
+          loserUserId: users[0],
+          reason: 'score-diff'
+        });
+        return;
+      }
+      const users = chatRoom2.participants.map(u => u._id.toString());
       // 각 참가자별 총점 계산
       const userScores = {};
       users.forEach(uid => { userScores[uid] = 0; });
@@ -264,7 +282,16 @@ io.on('connection', (socket) => {
           console.log('[DEBUG] 점수차 분기 진입(1명)', roomId, 'user:', users[0], 'score:', userScores[users[0]]);
           // --- ChatRoom에 1차 승자/패자, 종료 사유, 라운드 저장 ---
           ChatRoom.findById(roomId).then(async chatRoom2 => {
-            if (!chatRoom2) return;
+            if (!chatRoom2) {
+              console.log('[ERROR] ChatRoom not found', roomId);
+              // fallback: 최소한 game-ended emit은 보장
+              io.to(roomId).emit('game-ended', {
+                winnerUserId: users[0],
+                loserUserId: users[0],
+                reason: 'score-diff'
+              });
+              return;
+            }
             if (chatRoom2.round === 2) {
               // 재경기: 점수로만 최종 승자 결정, 배심원 투표 없음
               chatRoom2.finalWinner = users[0];
@@ -303,7 +330,16 @@ io.on('connection', (socket) => {
           const loserUserId = userScores[uid1] > userScores[uid2] ? uid2 : uid1;
           // --- ChatRoom에 1차 승자/패자, 종료 사유, 라운드 저장 ---
           ChatRoom.findById(roomId).then(async chatRoom2 => {
-            if (!chatRoom2) return;
+            if (!chatRoom2) {
+              console.log('[ERROR] ChatRoom not found', roomId);
+              // fallback: 최소한 game-ended emit은 보장
+              io.to(roomId).emit('game-ended', {
+                winnerUserId,
+                loserUserId,
+                reason: 'score-diff'
+              });
+              return;
+            }
             if (chatRoom2.round === 2) {
               // 재경기: 점수로만 최종 승자 결정, 배심원 투표 없음
               chatRoom2.finalWinner = winnerUserId;
