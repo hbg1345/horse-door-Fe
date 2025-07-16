@@ -469,6 +469,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
     // 동점이면 1차 승자 유지
     const firstWinner = chatRoom.firstWinner ? String(chatRoom.firstWinner) : null;
     if (!secondWinner && firstWinner) secondWinner = firstWinner;
+    console.log('[juryVoteResult] firstWinner:', firstWinner, 'secondWinner:', secondWinner, 'votes:', votes);
     setJuryVoteResult({ firstWinner, secondWinner, votes });
     // 2초 후 자동으로 안내 닫기
     const t = setTimeout(() => setJuryVoteResult(null), 2000);
