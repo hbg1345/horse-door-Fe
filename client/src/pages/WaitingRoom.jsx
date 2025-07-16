@@ -448,6 +448,18 @@ export default function WaitingRoom() {
                     {room.readyParticipants && room.readyParticipants.map(String).includes(String(user._id || user.id)) && (
                       <span className="ml-2 text-green-500 font-bold">[준비됨]</span>
                     )}
+                    {/* 방장만 볼 수 있는 배심원 내리기 버튼 */}
+                    {isOwner && (
+                      <button
+                        className="ml-2 px-2 py-1 bg-transparent hover:bg-purple-200 text-purple-600 rounded text-base font-mono border-none disabled:text-gray-400"
+                        style={{marginLeft:8, fontWeight:'bold', lineHeight:'1'}}
+                        disabled={roleChangeLoading === (user._id || user.id) + 'jury'}
+                        onClick={() => handleParticipantToJury(user._id || user.id)}
+                        title="배심원으로 내리기"
+                      >
+                        {roleChangeLoading === (user._id || user.id) + 'jury' ? '⏳' : '↓'}
+                      </button>
+                    )}
                   </span>
                 ))
               ) : !isOwner ? (
