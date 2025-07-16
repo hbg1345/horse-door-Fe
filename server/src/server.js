@@ -185,7 +185,7 @@ io.on('connection', (socket) => {
         // 제한시간 초과 시 타이머 분기
         if (state.timer <= 0) {
           clearInterval(state.timerRef);
-          console.log('[TIMER] turn-timeout emit', msg.roomId, 'currentTurnUserId:', state.currentTurnUserId);
+          console.log('[DEBUG] 제한시간 초과 분기 진입', msg.roomId, 'currentTurnUserId:', state.currentTurnUserId, 'turnState:', JSON.stringify(state));
           io.to(msg.roomId).emit('turn-timeout', { loserUserId: String(state.currentTurnUserId) });
           // --- 게임 종료: 제한시간 초과 즉시 패배 ---
           ChatRoom.findById(msg.roomId).populate('participants').then(async chatRoom2 => {
@@ -261,6 +261,7 @@ io.on('connection', (socket) => {
       // 점수차 체크: 상대가 없으면 0점 처리
       if (users.length === 1) {
         if (userScores[users[0]] >= 100) {
+          console.log('[DEBUG] 점수차 분기 진입(1명)', roomId, 'user:', users[0], 'score:', userScores[users[0]]);
           // --- ChatRoom에 1차 승자/패자, 종료 사유, 라운드 저장 ---
           ChatRoom.findById(roomId).then(async chatRoom2 => {
             if (!chatRoom2) return;
@@ -297,6 +298,7 @@ io.on('connection', (socket) => {
         const [uid1, uid2] = users;
         const diff = Math.abs(userScores[uid1] - userScores[uid2]);
         if (diff >= 100) {
+          console.log('[DEBUG] 점수차 분기 진입(2명)', roomId, 'uid1:', uid1, 'score1:', userScores[uid1], 'uid2:', uid2, 'score2:', userScores[uid2]);
           const winnerUserId = userScores[uid1] > userScores[uid2] ? uid1 : uid2;
           const loserUserId = userScores[uid1] > userScores[uid2] ? uid2 : uid1;
           // --- ChatRoom에 1차 승자/패자, 종료 사유, 라운드 저장 ---
