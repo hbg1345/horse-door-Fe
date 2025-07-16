@@ -325,7 +325,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
     const handleTurnTimeout = ({ loserUserId }) => {
       if (user.id === loserUserId) {
         setInputDisabled(true);
-        alert('패배하였습니다');
+        // alert('패배하였습니다'); // 모달만 뜨도록 alert는 주석 처리
       }
     };
     socket.on('turn-changed', handleTurnChanged);
