@@ -592,7 +592,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
                       <div className="text-xs mt-2 font-mono border-t border-gray-600 pt-1">
                         <div className="flex gap-2 items-center">
                           <span className="font-bold">총점: <span className="text-lg" style={{color: scoreSum >= 15 ? '#3b82f6' : scoreSum <= 8 ? '#ef4444' : '#f59e42'}}>{scoreSum}</span></span>
-                          <span className="text-blue-700 font-bold">(
+                          <span className="text-red-600 font-bold">(
                             {Object.entries(message.score).map(([k, v]) => `${k}:${v}`).join(', ')}
                           )</span>
                         </div>
