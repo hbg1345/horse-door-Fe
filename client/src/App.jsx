@@ -7,7 +7,6 @@ import Protected from './components/Protected';
 import KakaoRedirect from './pages/KakaoRedirect';
 import KakaoCallback from './pages/KakaoCallback';
 import WaitingRoom from './pages/WaitingRoom';
-import GeakseoPDF from "./components/GeakseoPDF";
 
 export default function App() {
   return (
@@ -28,7 +27,6 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       </AuthProvider>
-      <GeakseoPDF />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { io } from 'socket.io-client';
 import axios from 'axios';
 import html2pdf from "html2pdf.js";
 import EditRoomModal from '../components/EditRoomModal';
+import GeakseoPDF from '../components/GeakseoPDF';
 
 function LoadingOverlay() {
   return (
@@ -108,6 +109,7 @@ export default function WaitingRoom() {
   const [showPledgeModal, setShowPledgeModal] = useState(false);
   const [pledgeText, setPledgeText] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [showGeakseoModal, setShowGeakseoModal] = useState(false);
 
   async function fetchSummary() {
     setSummaryLoading(true);
@@ -518,6 +520,10 @@ export default function WaitingRoom() {
         </div>
       )}
       {showEditModal && <EditRoomModal room={room} onClose={()=>setShowEditModal(false)} onSave={async()=>{setShowEditModal(false); await fetchRoom(); await fetchSummary();}} />}
+      {showGeakseoModal && <GeakseoPDF onClose={() => {
+        console.log("WaitingRoom에서 onClose 호출됨");
+        setShowGeakseoModal(false);
+      }} />}
       {/* 대기룸 채팅창 (화면 전체 우측 하단 고정) */}
       {user && roomId && (
         <div style={{position:'fixed',bottom:200,right:80,zIndex:1000,width:560,height:320}}>
@@ -653,6 +659,12 @@ export default function WaitingRoom() {
             >
               채팅 시작
             </button>
+            <button
+              className="bg-blue-500 hover:bg-blue-600 text-white py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-blue-400 hover:border-blue-300 shadow"
+              onClick={() => setShowGeakseoModal(true)}
+            >
+              각서
+            </button>
           </>
         ) : (isParticipantA || isParticipantB) ? (
           <>
@@ -685,6 +697,12 @@ export default function WaitingRoom() {
                 준비
               </button>
             )}
+            <button
+              className="bg-blue-500 hover:bg-blue-600 text-white py-3 px-10 rounded-xl font-bold font-mono text-xl border-2 border-blue-400 hover:border-blue-300 shadow"
+              onClick={() => setShowGeakseoModal(true)}
+            >
+              각서
+            </button>
           </>
         ) : null}
       </div>
