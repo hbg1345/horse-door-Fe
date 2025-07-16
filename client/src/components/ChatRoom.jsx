@@ -300,7 +300,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
   };
 
   // 채팅 입력 타이머 상태
-  const CHAT_TIME_LIMIT = 20; // 초
+  const CHAT_TIME_LIMIT = 10; // 초
   const [timeLeft, setTimeLeft] = useState(CHAT_TIME_LIMIT);
   const [inputDisabled, setInputDisabled] = useState(false);
   const timerRef = useRef();
@@ -473,6 +473,18 @@ export default function ChatRoom({ chatRoom, onBack }) {
     const t = setTimeout(() => setJuryVoteResult(null), 2000);
     return () => clearTimeout(t);
   }, [juryVote && juryVote.ended]);
+
+  // --- game-ended 소켓 이벤트 수신 ---
+  useEffect(() => {
+    if (!socket) return;
+    const handleGameEnded = ({ winnerUserId, loserUserId, reason }) => {
+      setGameResult({ winnerUserId, loserUserId, reason });
+    };
+    socket.on('game-ended', handleGameEnded);
+    return () => {
+      socket.off('game-ended', handleGameEnded);
+    };
+  }, [socket]);
 
   return (
     <div className="w-full h-screen bg-black flex flex-row">
