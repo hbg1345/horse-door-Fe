@@ -214,6 +214,7 @@ io.on('connection', (socket) => {
             chatRoom2.gameEndedReason = 'timeout';
             await chatRoom2.save();
             console.log('[TIMER] game-ended emit', msg.roomId, 'winner:', winnerUserId, 'loser:', loserUserId);
+            console.log('[EMIT] game-ended', msg.roomId, winnerUserId, loserUserId, 'timeout');
             io.to(msg.roomId).emit('game-ended', {
               winnerUserId,
               loserUserId,
@@ -283,6 +284,7 @@ io.on('connection', (socket) => {
             await chatRoom2.save();
           });
           console.log('[SCORE] game-ended emit', roomId, 'winner/loser:', users[0]);
+          console.log('[EMIT] game-ended', roomId, users[0], users[0], 'score-diff');
           io.to(roomId).emit('game-ended', {
             winnerUserId: users[0],
             loserUserId: users[0],
@@ -320,6 +322,7 @@ io.on('connection', (socket) => {
             await chatRoom2.save();
           });
           console.log('[SCORE] game-ended emit', roomId, 'winner:', winnerUserId, 'loser:', loserUserId);
+          console.log('[EMIT] game-ended', roomId, winnerUserId, loserUserId, 'score-diff');
           io.to(roomId).emit('game-ended', {
             winnerUserId,
             loserUserId,
