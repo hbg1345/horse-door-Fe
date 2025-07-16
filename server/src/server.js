@@ -79,7 +79,7 @@ async function startJuryVote(roomId, winnerUserId, loserUserId) {
         await chatRoom.save();
         // --- 1차/2차 승자 분기 수정: 다르면 재경기, 같으면 최종 승자 ---
         if (firstWinner && secondWinner) {
-          if (firstWinner === secondWinner) {
+          if (String(firstWinner) === String(secondWinner)) {
             // 1차/2차 승자가 같으면 1차 승자가 최종 승자
             chatRoom.finalWinner = firstWinner;
             chatRoom.finalLoser = firstLoser;
