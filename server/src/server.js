@@ -24,6 +24,9 @@ const connectedUsers = new Map(); // socketId -> { userId, nickname, roomId }
 // roomId별 턴/타이머 상태 저장
 const turnStateMap = new Map(); // roomId -> { currentTurnUserId, timer, timerRef }
 
+// --- 턴 제한 시간 상수 선언 ---
+const TURN_TIME_LIMIT = 10; // 초
+
 // --- 배심원 투표 상태 저장 ---
 const juryVoteStateMap = new Map(); // roomId -> { votes: {userId: 'A'|'B'}, timerRef, timeLeft }
 
@@ -136,7 +139,7 @@ io.on('connection', (socket) => {
           if (!turnStateMap.has(roomId)) turnStateMap.set(roomId, {});
           const state = turnStateMap.get(roomId);
           state.currentTurnUserId = ownerId;
-          state.timer = 20;
+          state.timer = 10;
           // 타이머 시작
           if (state.timerRef) clearInterval(state.timerRef);
           state.timerRef = setInterval(() => {
@@ -174,7 +177,7 @@ io.on('connection', (socket) => {
       let nextTurnUserId = users.find(id => id !== msg.userId);
       if (!nextTurnUserId) nextTurnUserId = msg.userId; // 혼자면 내 턴 반복
       state.currentTurnUserId = nextTurnUserId;
-      state.timer = 20;
+      state.timer = 10;
       // 타이머 리셋
       if (state.timerRef) clearInterval(state.timerRef);
       state.timerRef = setInterval(() => {

@@ -478,6 +478,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
   useEffect(() => {
     if (!socket) return;
     const handleGameEnded = ({ winnerUserId, loserUserId, reason }) => {
+      console.log('[game-ended] 이벤트 수신', winnerUserId, loserUserId, reason);
       setGameResult({ winnerUserId, loserUserId, reason });
     };
     socket.on('game-ended', handleGameEnded);
