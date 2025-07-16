@@ -77,24 +77,27 @@ async function startJuryVote(roomId, winnerUserId, loserUserId) {
         if (secondWinner === null && firstWinner) secondWinner = firstWinner;
         chatRoom.secondWinner = secondWinner;
         await chatRoom.save();
-        // --- 1차/2차 승자가 다르면 최종 승자 결정 ---
-        if (firstWinner && secondWinner && firstWinner !== secondWinner) {
-          chatRoom.finalWinner = secondWinner;
-          chatRoom.finalLoser = firstWinner;
-          await chatRoom.save();
-          io.to(roomId).emit('final-winner', {
-            finalWinner: secondWinner,
-            finalLoser: firstWinner,
-            round: chatRoom.round
-          });
-        } else {
-          // --- 같으면 재경기 시작 ---
-          chatRoom.isRematch = true;
-          chatRoom.round = 2;
-          await chatRoom.save();
-          io.to(roomId).emit('rematch-start', {
-            round: 2
-          });
+        // --- 1차/2차 승자 분기 수정: 다르면 재경기, 같으면 최종 승자 ---
+        if (firstWinner && secondWinner) {
+          if (firstWinner === secondWinner) {
+            // 1차/2차 승자가 같으면 1차 승자가 최종 승자
+            chatRoom.finalWinner = firstWinner;
+            chatRoom.finalLoser = firstLoser;
+            await chatRoom.save();
+            io.to(roomId).emit('final-winner', {
+              finalWinner: firstWinner,
+              finalLoser: firstLoser,
+              round: chatRoom.round
+            });
+          } else {
+            // 1차/2차 승자가 다르면 재경기
+            chatRoom.isRematch = true;
+            chatRoom.round = 2;
+            await chatRoom.save();
+            io.to(roomId).emit('rematch-start', {
+              round: 2
+            });
+          }
         }
       });
       juryVoteStateMap.delete(roomId);

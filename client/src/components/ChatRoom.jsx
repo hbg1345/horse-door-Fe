@@ -405,8 +405,9 @@ export default function ChatRoom({ chatRoom, onBack }) {
     const handleJuryVoteUpdate = ({ votes, timeLeft }) => {
       setJuryVote(prev => prev ? { ...prev, votes, timeLeft } : null);
     };
-    const handleJuryVoteEnded = ({ votes }) => {
+    const handleJuryVoteEnded = ({ votes, firstWinner, secondWinner }) => {
       setJuryVote(prev => prev ? { ...prev, votes, ended: true } : null);
+      setJuryVoteResult({ firstWinner, secondWinner, votes });
     };
     socket.on('start-jury-vote', handleStartJuryVote);
     socket.on('jury-vote-update', handleJuryVoteUpdate);
