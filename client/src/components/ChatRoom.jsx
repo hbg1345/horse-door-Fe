@@ -704,6 +704,26 @@ export default function ChatRoom({ chatRoom, onBack }) {
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-8 min-w-[340px] flex flex-col items-center">
             <h2 className="text-xl font-bold mb-4 text-purple-700 font-mono">배심원 투표</h2>
+            {/* --- 각 당사자 점수 요약 --- */}
+            <div className="flex gap-8 mb-6 w-full justify-center">
+              {juryVote.participants.map(p => {
+                const userId = p.id;
+                const total = getParticipantTotalScore(messages, userId);
+                const sums = getParticipantScoreSums(messages, userId);
+                return (
+                  <div key={userId} className="bg-gray-100 rounded-lg p-4 min-w-[140px] flex flex-col items-center border-2 border-purple-300">
+                    <div className="font-bold text-lg text-purple-700 mb-1">{p.nickname}</div>
+                    <div className="font-mono text-xl mb-2">총점: <span className="font-bold">{total}</span></div>
+                    <div className="text-sm text-gray-700 font-mono space-y-1">
+                      {Object.entries(sums).map(([k, v]) => (
+                        <div key={k}>{k}: <b>{v}</b></div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* --- 기존 투표 UI --- */}
             {juryVote.jury && juryVote.jury.length === 0 ? (
               <div className="text-gray-500 font-mono text-lg mt-4">
                 배심원이 없어 투표가 진행되지 않습니다.
