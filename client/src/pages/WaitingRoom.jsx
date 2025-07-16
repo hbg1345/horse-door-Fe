@@ -57,7 +57,6 @@ function WaitingRoomChat({ roomId, user, socketRef }) {
       timestamp: Date.now(),
     };
     socketRef.current.emit('waiting-room-chat', msg);
-    setMessages(prev => [...prev, msg]);
     setInput('');
   };
 
