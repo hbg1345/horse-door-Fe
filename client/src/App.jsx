@@ -23,7 +23,7 @@ export default function App() {
             } />
             <Route path="/auth/kakao" element={<KakaoRedirect />} />
             <Route path="/auth/kakao/callback" element={<KakaoCallback />} />
-            <Route path="/waiting-room/:roomId" element={<Protected><WaitingRoom /></Protected>} />
+            <Route path="/waiting-room/:roomId" element={<WaitingRoom />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
