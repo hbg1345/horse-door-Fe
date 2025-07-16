@@ -68,6 +68,15 @@ const chatRoomSchema = new Schema({
       timestamp: { type: Date, default: Date.now }
     }
   ],
+  // --- 게임 상태/승자 관련 필드 추가 ---
+  round: { type: Number, default: 1 }, // 1: 1차, 2: 재경기
+  firstWinner: { type: Schema.Types.ObjectId, ref: 'User', default: null }, // 1차 승자
+  firstLoser: { type: Schema.Types.ObjectId, ref: 'User', default: null }, // 1차 패자
+  secondWinner: { type: Schema.Types.ObjectId, ref: 'User', default: null }, // 2차(배심원) 승자
+  finalWinner: { type: Schema.Types.ObjectId, ref: 'User', default: null }, // 최종 승자
+  finalLoser: { type: Schema.Types.ObjectId, ref: 'User', default: null }, // 최종 패자
+  gameEndedReason: { type: String, default: '' }, // 'timeout', 'score-diff', 'jury', 'rematch', ...
+  isRematch: { type: Boolean, default: false }, // 재경기 여부
   createdAt: { 
     type: Date, 
     default: Date.now 

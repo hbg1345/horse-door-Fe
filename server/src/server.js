@@ -46,7 +46,54 @@ async function startJuryVote(roomId, winnerUserId, loserUserId) {
     io.to(roomId).emit('jury-vote-update', { votes: state.votes, timeLeft: state.timeLeft });
     if (state.timeLeft <= 0) {
       clearInterval(timerRef);
+      io.to(roomId).emit('jury-vote-update', { votes: state.votes, timeLeft: state.timeLeft });
       io.to(roomId).emit('jury-vote-ended', { votes: state.votes });
+      // --- 배심원 투표 종료 후 2차 승자/최종 승자/재경기 분기 ---
+      ChatRoom.findById(roomId).then(async chatRoom => {
+        if (!chatRoom) return;
+        // 1차 승자/패자
+        const firstWinner = chatRoom.firstWinner ? chatRoom.firstWinner.toString() : null;
+        const firstLoser = chatRoom.firstLoser ? chatRoom.firstLoser.toString() : null;
+        // 참가자 id 목록
+        const participantIds = chatRoom.participants.map(u => u.toString());
+        // --- 다수결로 2차 승자 결정 ---
+        const voteCounts = {};
+        Object.values(state.votes).forEach(voteUserId => {
+          if (!voteCounts[voteUserId]) voteCounts[voteUserId] = 0;
+          voteCounts[voteUserId]++;
+        });
+        let secondWinner = null;
+        let maxVotes = 0;
+        for (const [userId, count] of Object.entries(voteCounts)) {
+          if (count > maxVotes) {
+            secondWinner = userId;
+            maxVotes = count;
+          }
+        }
+        // 동점이면 1차 승자 유지
+        if (secondWinner === null && firstWinner) secondWinner = firstWinner;
+        chatRoom.secondWinner = secondWinner;
+        await chatRoom.save();
+        // --- 1차/2차 승자가 다르면 최종 승자 결정 ---
+        if (firstWinner && secondWinner && firstWinner !== secondWinner) {
+          chatRoom.finalWinner = secondWinner;
+          chatRoom.finalLoser = firstWinner;
+          await chatRoom.save();
+          io.to(roomId).emit('final-winner', {
+            finalWinner: secondWinner,
+            finalLoser: firstWinner,
+            round: chatRoom.round
+          });
+        } else {
+          // --- 같으면 재경기 시작 ---
+          chatRoom.isRematch = true;
+          chatRoom.round = 2;
+          await chatRoom.save();
+          io.to(roomId).emit('rematch-start', {
+            round: 2
+          });
+        }
+      });
       juryVoteStateMap.delete(roomId);
     }
   }, 1000);
@@ -138,12 +185,31 @@ io.on('connection', (socket) => {
           console.log('[TIMER] turn-timeout emit', msg.roomId, 'currentTurnUserId:', state.currentTurnUserId);
           io.to(msg.roomId).emit('turn-timeout', { loserUserId: String(state.currentTurnUserId) });
           // --- 게임 종료: 제한시간 초과 즉시 패배 ---
-          ChatRoom.findById(msg.roomId).populate('participants').then(chatRoom2 => {
+          ChatRoom.findById(msg.roomId).populate('participants').then(async chatRoom2 => {
             if (!chatRoom2) return;
             const users2 = chatRoom2.participants.map(u => u._id.toString());
             const loserUserId = String(state.currentTurnUserId);
             let winnerUserId = users2.find(id => id !== loserUserId);
             if (!winnerUserId) winnerUserId = loserUserId; // 혼자면 승자=패자
+            // --- ChatRoom에 1차 승자/패자, 종료 사유, 라운드 저장 ---
+            if (chatRoom2.round === 2) {
+              // 재경기: 점수로만 최종 승자 결정, 배심원 투표 없음
+              chatRoom2.finalWinner = winnerUserId;
+              chatRoom2.finalLoser = loserUserId;
+              chatRoom2.gameEndedReason = 'timeout';
+              await chatRoom2.save();
+              io.to(msg.roomId).emit('final-winner', {
+                finalWinner: winnerUserId,
+                finalLoser: loserUserId,
+                round: 2
+              });
+              return;
+            }
+            chatRoom2.round = 1;
+            chatRoom2.firstWinner = winnerUserId;
+            chatRoom2.firstLoser = loserUserId;
+            chatRoom2.gameEndedReason = 'timeout';
+            await chatRoom2.save();
             console.log('[TIMER] game-ended emit', msg.roomId, 'winner:', winnerUserId, 'loser:', loserUserId);
             io.to(msg.roomId).emit('game-ended', {
               winnerUserId,
@@ -191,6 +257,28 @@ io.on('connection', (socket) => {
       // 점수차 체크: 상대가 없으면 0점 처리
       if (users.length === 1) {
         if (userScores[users[0]] >= 100) {
+          // --- ChatRoom에 1차 승자/패자, 종료 사유, 라운드 저장 ---
+          ChatRoom.findById(roomId).then(async chatRoom2 => {
+            if (!chatRoom2) return;
+            if (chatRoom2.round === 2) {
+              // 재경기: 점수로만 최종 승자 결정, 배심원 투표 없음
+              chatRoom2.finalWinner = users[0];
+              chatRoom2.finalLoser = users[0];
+              chatRoom2.gameEndedReason = 'score-diff';
+              await chatRoom2.save();
+              io.to(roomId).emit('final-winner', {
+                finalWinner: users[0],
+                finalLoser: users[0],
+                round: 2
+              });
+              return;
+            }
+            chatRoom2.round = 1;
+            chatRoom2.firstWinner = users[0];
+            chatRoom2.firstLoser = users[0];
+            chatRoom2.gameEndedReason = 'score-diff';
+            await chatRoom2.save();
+          });
           console.log('[SCORE] game-ended emit', roomId, 'winner/loser:', users[0]);
           io.to(roomId).emit('game-ended', {
             winnerUserId: users[0],
@@ -206,6 +294,28 @@ io.on('connection', (socket) => {
         if (diff >= 100) {
           const winnerUserId = userScores[uid1] > userScores[uid2] ? uid1 : uid2;
           const loserUserId = userScores[uid1] > userScores[uid2] ? uid2 : uid1;
+          // --- ChatRoom에 1차 승자/패자, 종료 사유, 라운드 저장 ---
+          ChatRoom.findById(roomId).then(async chatRoom2 => {
+            if (!chatRoom2) return;
+            if (chatRoom2.round === 2) {
+              // 재경기: 점수로만 최종 승자 결정, 배심원 투표 없음
+              chatRoom2.finalWinner = winnerUserId;
+              chatRoom2.finalLoser = loserUserId;
+              chatRoom2.gameEndedReason = 'score-diff';
+              await chatRoom2.save();
+              io.to(roomId).emit('final-winner', {
+                finalWinner: winnerUserId,
+                finalLoser: loserUserId,
+                round: 2
+              });
+              return;
+            }
+            chatRoom2.round = 1;
+            chatRoom2.firstWinner = winnerUserId;
+            chatRoom2.firstLoser = loserUserId;
+            chatRoom2.gameEndedReason = 'score-diff';
+            await chatRoom2.save();
+          });
           console.log('[SCORE] game-ended emit', roomId, 'winner:', winnerUserId, 'loser:', loserUserId);
           io.to(roomId).emit('game-ended', {
             winnerUserId,

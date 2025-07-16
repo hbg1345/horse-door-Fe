@@ -425,6 +425,55 @@ export default function ChatRoom({ chatRoom, onBack }) {
     socket.emit('jury-vote', { roomId: chatRoom._id, juryUserId: user.id, voteUserId });
   };
 
+  // --- 상태 추가 ---
+  const [finalResult, setFinalResult] = useState(null); // { finalWinner, finalLoser, round }
+  const [rematchNotice, setRematchNotice] = useState(false);
+  const [juryVoteResult, setJuryVoteResult] = useState(null); // { firstWinner, secondWinner, votes }
+
+  // --- 소켓 이벤트 핸들러 추가 ---
+  useEffect(() => {
+    if (!socket) return;
+    // 최종 승자 이벤트
+    const handleFinalWinner = ({ finalWinner, finalLoser, round }) => {
+      setFinalResult({ finalWinner, finalLoser, round });
+      setJuryVote(null); // 투표 패널 닫기
+      setRematchNotice(false);
+    };
+    // 재경기 시작 이벤트
+    const handleRematchStart = ({ round }) => {
+      setRematchNotice(true);
+      setFinalResult(null);
+      setJuryVote(null);
+      setTimeout(() => setRematchNotice(false), 2000);
+    };
+    socket.on('final-winner', handleFinalWinner);
+    socket.on('rematch-start', handleRematchStart);
+    return () => {
+      socket.off('final-winner', handleFinalWinner);
+      socket.off('rematch-start', handleRematchStart);
+    };
+  }, [socket]);
+
+  // --- 배심원 투표 종료 시 결과 안내 ---
+  useEffect(() => {
+    if (!juryVote || !juryVote.ended) return;
+    // 1차/2차 승자 추출
+    const votes = juryVote.votes || {};
+    const voteCounts = {};
+    Object.values(votes).forEach(v => { voteCounts[v] = (voteCounts[v] || 0) + 1; });
+    let secondWinner = null, maxVotes = 0;
+    for (const [uid, cnt] of Object.entries(voteCounts)) {
+      if (cnt > maxVotes) { secondWinner = uid; maxVotes = cnt; }
+    }
+    // 동점이면 1차 승자 유지
+    const firstWinner = chatRoom.firstWinner ? String(chatRoom.firstWinner) : null;
+    if (!secondWinner && firstWinner) secondWinner = firstWinner;
+    setJuryVoteResult({ firstWinner, secondWinner, votes });
+    // 2초 후 자동으로 안내 닫기
+    const t = setTimeout(() => setJuryVoteResult(null), 2000);
+    return () => clearTimeout(t);
+  }, [juryVote && juryVote.ended]);
+
   return (
     <div className="w-full h-screen bg-black flex flex-row">
       {/* 메인 채팅창 */}
@@ -760,6 +809,56 @@ export default function ChatRoom({ chatRoom, onBack }) {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+      {/* --- 최종 승자 안내 모달 --- */}
+      {finalResult && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 min-w-[320px] flex flex-col items-center">
+            <h2 className="text-2xl font-bold mb-4 text-green-700 font-mono">최종 승자</h2>
+            <div className="mb-4 text-lg font-mono">
+              {finalResult.finalWinner === user.id
+                ? '🎉 최종 승리하셨습니다!'
+                : finalResult.finalLoser === user.id
+                ? '😢 최종 패배하셨습니다.'
+                : '최종 승자: ' + (chatRoom.participants.find(u => (u._id||u.id) === finalResult.finalWinner)?.nickname || finalResult.finalWinner)}
+            </div>
+            <div className="mb-2 text-gray-700 font-mono">
+              라운드: {finalResult.round === 2 ? '재경기' : '1차'}
+            </div>
+            <button
+              className="mt-4 px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded font-bold font-mono"
+              onClick={() => setFinalResult(null)}
+            >확인</button>
+          </div>
+        </div>
+      )}
+      {/* --- 재경기 안내 모달 --- */}
+      {rematchNotice && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 min-w-[320px] flex flex-col items-center">
+            <h2 className="text-xl font-bold mb-4 text-purple-700 font-mono">재경기 시작!</h2>
+            <div className="mb-4 text-lg font-mono">1차/2차 승자가 같아 재경기를 진행합니다.</div>
+          </div>
+        </div>
+      )}
+      {/* --- 배심원 투표 결과 안내 --- */}
+      {juryVoteResult && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 min-w-[280px] flex flex-col items-center">
+            <h2 className="text-lg font-bold mb-2 text-purple-700 font-mono">배심원 투표 결과</h2>
+            <div className="mb-2 text-gray-700 font-mono">
+              1차 승자: {chatRoom.participants.find(u => (u._id||u.id) === juryVoteResult.firstWinner)?.nickname || juryVoteResult.firstWinner}
+            </div>
+            <div className="mb-2 text-gray-700 font-mono">
+              2차(배심원) 승자: {chatRoom.participants.find(u => (u._id||u.id) === juryVoteResult.secondWinner)?.nickname || juryVoteResult.secondWinner}
+            </div>
+            <div className="mb-2 text-gray-700 font-mono">
+              {juryVoteResult.firstWinner !== juryVoteResult.secondWinner
+                ? '최종 승자는 배심원 투표 결과로 결정됩니다.'
+                : '동점! 재경기로 진행됩니다.'}
+            </div>
           </div>
         </div>
       )}
