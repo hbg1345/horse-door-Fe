@@ -132,22 +132,25 @@ io.on('connection', (socket) => {
       if (state.timerRef) clearInterval(state.timerRef);
       state.timerRef = setInterval(() => {
         state.timer -= 0.03;
+        // 제한시간 초과 시 타이머 분기
         if (state.timer <= 0) {
           clearInterval(state.timerRef);
+          console.log('[TIMER] turn-timeout emit', msg.roomId, 'currentTurnUserId:', state.currentTurnUserId);
           io.to(msg.roomId).emit('turn-timeout', { loserUserId: String(state.currentTurnUserId) });
           // --- 게임 종료: 제한시간 초과 즉시 패배 ---
-          // 승자 계산: 참가자 2명 중 loserUserId가 아닌 사람이 승자, 혼자면 loserUserId=winnerUserId
           ChatRoom.findById(msg.roomId).populate('participants').then(chatRoom2 => {
             if (!chatRoom2) return;
             const users2 = chatRoom2.participants.map(u => u._id.toString());
             const loserUserId = String(state.currentTurnUserId);
             let winnerUserId = users2.find(id => id !== loserUserId);
             if (!winnerUserId) winnerUserId = loserUserId; // 혼자면 승자=패자
+            console.log('[TIMER] game-ended emit', msg.roomId, 'winner:', winnerUserId, 'loser:', loserUserId);
             io.to(msg.roomId).emit('game-ended', {
               winnerUserId,
               loserUserId,
               reason: 'timeout'
             });
+            console.log('[TIMER] startJuryVote 호출', msg.roomId, 'winner:', winnerUserId, 'loser:', loserUserId);
             startJuryVote(msg.roomId, winnerUserId, loserUserId);
           });
         } else {
@@ -188,11 +191,13 @@ io.on('connection', (socket) => {
       // 점수차 체크: 상대가 없으면 0점 처리
       if (users.length === 1) {
         if (userScores[users[0]] >= 100) {
+          console.log('[SCORE] game-ended emit', roomId, 'winner/loser:', users[0]);
           io.to(roomId).emit('game-ended', {
             winnerUserId: users[0],
             loserUserId: users[0],
             reason: 'score-diff'
           });
+          console.log('[SCORE] startJuryVote 호출', roomId, 'winner/loser:', users[0]);
           startJuryVote(roomId, users[0], users[0]);
         }
       } else if (users.length === 2) {
@@ -201,11 +206,13 @@ io.on('connection', (socket) => {
         if (diff >= 100) {
           const winnerUserId = userScores[uid1] > userScores[uid2] ? uid1 : uid2;
           const loserUserId = userScores[uid1] > userScores[uid2] ? uid2 : uid1;
+          console.log('[SCORE] game-ended emit', roomId, 'winner:', winnerUserId, 'loser:', loserUserId);
           io.to(roomId).emit('game-ended', {
             winnerUserId,
             loserUserId,
             reason: 'score-diff'
           });
+          console.log('[SCORE] startJuryVote 호출', roomId, 'winner:', winnerUserId, 'loser:', loserUserId);
           startJuryVote(roomId, winnerUserId, loserUserId);
         }
       }
