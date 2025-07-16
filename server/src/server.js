@@ -429,9 +429,8 @@ io.on('connection', (socket) => {
 
   // 대기룸 채팅 메시지 브로드캐스트
   socket.on('waiting-room-chat', (msg) => {
-    if (msg && msg.roomId) {
-      io.to(msg.roomId).emit('waiting-room-chat', msg);
-    }
+    // msg: { roomId, userId, nickname, message, timestamp }
+    io.to(msg.roomId).emit('waiting-room-chat', msg);
   });
 
   // leave-room 이벤트 처리
