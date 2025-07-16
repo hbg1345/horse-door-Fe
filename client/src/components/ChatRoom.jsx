@@ -342,6 +342,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
 
   // 나가기 버튼 핸들러
   const handleLeaveRoom = () => {
+    console.log('[버튼] 나가기 클릭, userRole:', userRole);
     // 참가자인 경우 확인 모달
     if (userRole === 'participant') {
       if (!window.confirm('정말로 채팅방에서 나가시겠습니까?')) {
@@ -431,6 +432,11 @@ export default function ChatRoom({ chatRoom, onBack }) {
   const [rematchNotice, setRematchNotice] = useState(false);
   const [juryVoteResult, setJuryVoteResult] = useState(null); // { firstWinner, secondWinner, votes }
 
+  // 모달 상태 추적용 로그
+  useEffect(() => {
+    console.log('[모달 상태] finalResult:', finalResult, 'gameResult:', gameResult, 'rematchNotice:', rematchNotice, 'juryVoteResult:', juryVoteResult);
+  }, [finalResult, gameResult, rematchNotice, juryVoteResult]);
+
   // --- 소켓 이벤트 핸들러 추가 ---
   useEffect(() => {
     if (!socket) return;
@@ -507,7 +513,10 @@ export default function ChatRoom({ chatRoom, onBack }) {
           <div className="flex gap-2 items-center">
             {!showSpectatorChat && (
               <button
-                onClick={() => setShowSpectatorChat(true)}
+                onClick={() => {
+                  console.log('[버튼] 관전채팅 열기 클릭');
+                  setShowSpectatorChat(true);
+                }}
                 className="bg-gray-700 hover:bg-green-600 text-green-300 hover:text-white py-2 px-3 rounded-lg font-mono font-bold border-2 border-green-400 hover:border-green-300 transition-all duration-200"
               >
                 관전채팅 열기
@@ -706,6 +715,7 @@ export default function ChatRoom({ chatRoom, onBack }) {
                 placeholder="메시지를 입력하세요..."
                 className="flex-1 bg-gray-800 border border-green-400 text-green-400 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent font-mono"
                 disabled={inputDisabled || !currentTurnUserId}
+                onClick={() => { console.log('[입력창] 클릭됨, disabled:', inputDisabled || !currentTurnUserId); }}
               />
               <button
                 type="submit"
@@ -781,7 +791,10 @@ export default function ChatRoom({ chatRoom, onBack }) {
             </div>
             <button
               className="mt-4 px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded font-bold font-mono"
-              onClick={() => setFinalResult(null)}
+              onClick={() => {
+                console.log('[모달] 최종 승자 확인 클릭');
+                setFinalResult(null);
+              }}
             >확인</button>
           </div>
         </div>
