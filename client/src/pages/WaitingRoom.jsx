@@ -361,11 +361,23 @@ export default function WaitingRoom() {
         <button
           className="bg-blue-500 hover:bg-blue-600 text-white py-3 px-8 rounded-lg font-bold font-mono text-lg border-2 border-blue-400 hover:border-blue-300 shadow"
           onClick={async () => {
+            const url = window.location.href;
             try {
-              await navigator.clipboard.writeText(window.location.href);
+              await navigator.clipboard.writeText(url);
               alert('초대 링크가 복사되었습니다!');
-            } catch {
-              alert('복사에 실패했습니다.');
+            } catch (e) {
+              // fallback: execCommand 방식
+              try {
+                const textarea = document.createElement('textarea');
+                textarea.value = url;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('초대 링크가 복사되었습니다! (호환모드)');
+              } catch (err) {
+                alert('복사에 실패했습니다: ' + (err.message || err));
+              }
             }
           }}
         >
