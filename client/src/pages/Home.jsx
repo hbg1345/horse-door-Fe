@@ -1,23 +1,28 @@
 // src/pages/Home.jsx
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 
 export default function Home() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   useEffect(() => {
     console.log("useEffect",user);
     if (!loading && user) {
       console.log(user.isAuthenticated, user.isRegistered);
       if (user.isAuthenticated && user.isRegistered) {
-        navigate('/dashboard');
+        if (location.state?.from) {
+          navigate(location.state.from.pathname + location.state.from.search, { replace: true });
+        } else {
+          navigate('/dashboard');
+        }
       } else if (user.isAuthenticated && !user.isRegistered) {
         // navigate('/register');
         console.log("navigated to register", user)
       }
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, location]);
 
   if (loading) return (
     <div className="w-full h-screen bg-black flex items-center justify-center">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -9,6 +9,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const { setUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSubmit = async e => {
     e.preventDefault();
@@ -24,7 +25,11 @@ export default function Register() {
       await api.post('/api/register', { nickname: nickname.trim() });
       const { data } = await api.get('/api/user');
       setUser(data);
-      navigate('/dashboard');
+      if (location.state?.from) {
+        navigate(location.state.from.pathname + location.state.from.search, { replace: true });
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       setError('닉네임 설정에 실패했습니다. 다시 시도해주세요.');
     } finally {
