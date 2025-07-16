@@ -40,7 +40,7 @@ function WaitingRoomChat({ roomId, user, socketRef }) {
     return () => {
       socketRef.current.off('waiting-room-chat', handler);
     };
-  }, [roomId, socketRef]);
+  }, [roomId, socketRef.current]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -170,6 +170,7 @@ export default function WaitingRoom() {
     // eslint-disable-next-line
   }, [roomId]);
 
+  // 소켓 연결 useEffect (room 제거)
   useEffect(() => {
     if (!user) return;
     const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
@@ -208,7 +209,7 @@ export default function WaitingRoom() {
       socket.disconnect();
     };
     // eslint-disable-next-line
-  }, [user, roomId, room]);
+  }, [user, roomId]); // room 제거
 
   useEffect(() => {
     if (!socketRef.current) return;
