@@ -50,7 +50,6 @@ async function startJuryVote(roomId, winnerUserId, loserUserId) {
     if (state.timeLeft <= 0) {
       clearInterval(timerRef);
       io.to(roomId).emit('jury-vote-update', { votes: state.votes, timeLeft: state.timeLeft });
-      io.to(roomId).emit('jury-vote-ended', { votes: state.votes });
       // --- 배심원 투표 종료 후 2차 승자/최종 승자/재경기 분기 ---
       ChatRoom.findById(roomId).then(async chatRoom => {
         if (!chatRoom) return;
@@ -77,10 +76,10 @@ async function startJuryVote(roomId, winnerUserId, loserUserId) {
         if (secondWinner === null && firstWinner) secondWinner = firstWinner;
         chatRoom.secondWinner = secondWinner;
         await chatRoom.save();
-        // --- 1차/2차 승자 분기 수정: 다르면 재경기, 같으면 최종 승자 ---
+        // --- 1차/2차 승자 분기: 같으면 최종 승자, 다르면 재경기 ---
         if (firstWinner && secondWinner) {
           if (String(firstWinner) === String(secondWinner)) {
-            // 1차/2차 승자가 같으면 1차 승자가 최종 승자
+            // 1차/2차 승자가 같으면 최종 승자 emit
             chatRoom.finalWinner = firstWinner;
             chatRoom.finalLoser = firstLoser;
             await chatRoom.save();

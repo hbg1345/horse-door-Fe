@@ -439,12 +439,14 @@ export default function ChatRoom({ chatRoom, onBack }) {
       setFinalResult({ finalWinner, finalLoser, round });
       setJuryVote(null); // 투표 패널 닫기
       setRematchNotice(false);
+      setGameResult(null); // 1차 승자 안내 닫기
     };
     // 재경기 시작 이벤트
     const handleRematchStart = ({ round }) => {
       setRematchNotice(true);
       setFinalResult(null);
       setJuryVote(null);
+      setGameResult(null); // 1차 승자 안내 닫기
       setTimeout(() => setRematchNotice(false), 2000);
     };
     socket.on('final-winner', handleFinalWinner);
@@ -480,8 +482,9 @@ export default function ChatRoom({ chatRoom, onBack }) {
   useEffect(() => {
     if (!socket) return;
     const handleGameEnded = ({ winnerUserId, loserUserId, reason }) => {
-      console.log('[game-ended] 이벤트 수신', winnerUserId, loserUserId, reason);
+      // 1차 승자 안내만 (최종 승자 아님)
       setGameResult({ winnerUserId, loserUserId, reason });
+      setFinalResult(null); // 최종 승자 안내 초기화
     };
     socket.on('game-ended', handleGameEnded);
     return () => {
@@ -739,17 +742,17 @@ export default function ChatRoom({ chatRoom, onBack }) {
           {systemMessage}
         </div>
       )}
-      {/* 게임 종료 모달 */}
-      {gameResult && (
+      {/* 게임 종료 모달 (1차 승자 안내) */}
+      {gameResult && !finalResult && !rematchNotice && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-8 min-w-[320px] flex flex-col items-center">
             <h2 className="text-2xl font-bold mb-4 text-green-600 font-mono">게임 종료</h2>
             <div className="mb-4 text-lg font-mono">
               {gameResult.winnerUserId === user.id
-                ? '🎉 승리하셨습니다!'
+                ? '🎉 1차 승리하셨습니다! (AI/시간초과)'
                 : gameResult.loserUserId === user.id
-                ? '😢 패배하셨습니다.'
-                : '게임이 종료되었습니다.'}
+                ? '😢 1차 패배하셨습니다. (AI/시간초과)'
+                : '1차 승자: ' + (chatRoom.participants.find(u => (u._id||u.id) === gameResult.winnerUserId)?.nickname || gameResult.winnerUserId)}
             </div>
             <div className="mb-2 text-gray-700 font-mono">
               종료 사유: {gameResult.reason === 'timeout' ? '제한시간 초과' : '점수차 100점 이상'}
@@ -757,78 +760,12 @@ export default function ChatRoom({ chatRoom, onBack }) {
             <button
               className="mt-4 px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded font-bold font-mono"
               onClick={() => setGameResult(null)}
-            >
-              확인 (배심원 투표로 이동)
-            </button>
-          </div>
-        </div>
-      )}
-      {/* 배심원 투표 패널 */}
-      {juryVote && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-8 min-w-[340px] flex flex-col items-center">
-            <h2 className="text-xl font-bold mb-4 text-purple-700 font-mono">배심원 투표</h2>
-            {/* --- 각 당사자 점수 요약 --- */}
-            <div className="flex gap-8 mb-6 w-full justify-center">
-              {juryVote.participants.map(p => {
-                const userId = p.id;
-                const total = getParticipantTotalScore(messages, userId);
-                const sums = getParticipantScoreSums(messages, userId);
-                return (
-                  <div key={userId} className="bg-gray-100 rounded-lg p-4 min-w-[140px] flex flex-col items-center border-2 border-purple-300">
-                    <div className="font-bold text-lg text-purple-700 mb-1">{p.nickname}</div>
-                    <div className="font-mono text-xl mb-2">총점: <span className="font-bold">{total}</span></div>
-                    <div className="text-sm text-gray-700 font-mono space-y-1">
-                      {Object.entries(sums).map(([k, v]) => (
-                        <div key={k}>{k}: <b>{v}</b></div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {/* --- 기존 투표 UI --- */}
-            {juryVote.jury && juryVote.jury.length === 0 ? (
-              <div className="text-gray-500 font-mono text-lg mt-4">
-                배심원이 없어 투표가 진행되지 않습니다.
-              </div>
-            ) : (
-              <>
-                <div className="mb-2 text-gray-700 font-mono">남은 시간: <span className="font-bold text-lg">{juryVote.timeLeft}</span>초</div>
-                <div className="mb-4 text-gray-700 font-mono">누가 더 잘했나요?</div>
-                <div className="flex gap-4 mb-4">
-                  {juryVote.participants.map(p => (
-                    <button
-                      key={p.id}
-                      className={`px-6 py-2 rounded font-bold font-mono border-2 transition-all duration-150 ${myJuryVote === p.id ? 'bg-purple-600 text-white border-purple-700' : 'bg-white text-purple-700 border-purple-400 hover:bg-purple-100'}`}
-                      disabled={!!myJuryVote || juryVote.ended}
-                      onClick={() => handleJuryVote(p.id)}
-                    >
-                      {p.nickname}
-                    </button>
-                  ))}
-                </div>
-                <div className="w-full mb-2">
-                  <div className="text-gray-700 font-mono mb-1">실시간 투표 현황</div>
-                  <div className="flex gap-4 justify-center">
-                    {juryVote.participants.map(p => (
-                      <div key={p.id} className="flex flex-col items-center">
-                        <span className="font-bold text-purple-700">{p.nickname}</span>
-                        <span className="text-lg font-mono">{Object.values(juryVote.votes || {}).filter(v => v === p.id).length}표</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {juryVote.ended && (
-                  <div className="mt-4 text-lg font-mono font-bold text-green-700">투표가 종료되었습니다.</div>
-                )}
-              </>
-            )}
+            >확인</button>
           </div>
         </div>
       )}
       {/* --- 최종 승자 안내 모달 --- */}
-      {finalResult && (
+      {finalResult && !rematchNotice && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-8 min-w-[320px] flex flex-col items-center">
             <h2 className="text-2xl font-bold mb-4 text-green-700 font-mono">최종 승자</h2>
